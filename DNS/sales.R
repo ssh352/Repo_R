@@ -1,4 +1,4 @@
-setwd("D:/GitHub/R_project/DNS")
+setwd("D:/GitHub/Repo_R/DNS")
 
 library(zoo)
 
@@ -130,9 +130,18 @@ library(forecast)
 #Строим общие графики
 pdf("observed.pdf")
 for(i in 1:length(shops)) {
-  plot(sales_daily[[i]], main = names(shops)[i], xlab="days", ylab="Price, RUR", type="l", col="gray")
+  plot(sales_daily[[i]], main = names(shops)[i], xlab="days", ylab="Price, RUR", type="l", col="gray", las=2)
+  # Добавляем линию тренда
+  model <- lm(as.numeric(sales_daily[[i]]) ~ index(sales_daily[[i]]))
+  abline(model, col = "green")
+  #Добавляем сглаженную ЛР для данных о продажах
   lines(zoo(lowess(sales_daily[[i]])$y, as.Date(shops[[i]]$date)), col="red")
+  #в случае если у нас есть 2а года продаж и больше добавляем дополнительную информацию
   if (length(sales_weekly[[i]]) >= 104) {plot(decompose(sales_weekly[[i]]))}
+  legend("topleft", c("Продажи", "Тренд", "Сглаженные"), 
+         col=c("gray","green","red"),
+         lty=c("solid","solid","solid"),
+         cex=1)
 }
 dev.off()
 
@@ -164,54 +173,56 @@ for(i in 1:length(shops)) {
   fit.tbats <-tbats(cut_weekly, lambda=Lw)
   fcast.tbats <- forecast(fit.tbats, h, lambda=Lw)
   sum_tbats <- sum(fcast.tbats$mean)
-
-  cut_num <- as.numeric(cut_weekly)
-  mean_num <- floor(as.numeric(fcast.tbats$mean))
-  all <- c(cut_num, mean_num)
-  start_date <- as.Date(paste(c(start(cut_weekly),1), sep="", collapse=" "), "%Y %U %u")
-  end_date <- as.Date(paste(c(end(cut_weekly),1), sep="", collapse=" "), "%Y %U %u")
-  ix_date <- seq(start_date, end_date + days_shift - 7, "week")
-  plot(ix_date,all, type="l", col="black", xlim=as.numeric(as.Date(c("2014-01-06","2015-03-16"))))
-  l_train <- (length(ix_date) - h)
-  l <- length(ix_date)
-  lines(ix_date[c(l_train:l)],all[c(l_train:l)], col="green", lwd=3)
-  abline(v = ix_date[min(which(ix_date > "2014-01-01"))], lty="dashed", col = "gray")
-  abline(v = ix_date[min(which(ix_date > "2014-04-01"))], lty="dashed", col = "gray")
-  abline(v = ix_date[min(which(ix_date > "2014-07-01"))], lty="dashed", col = "gray")
-  abline(v = ix_date[min(which(ix_date > "2014-10-01"))], lty="dashed", col = "gray")
-  abline(v = ix_date[min(which(ix_date > "2015-01-01"))], lty="dashed", col = "gray")
-  lines(ix_date,lowess(all)$y, col="red", lty = "dashed")
   
   #ARIMA
   fit.arima <- auto.arima(cut_weekly, lambda=Lw)
   fcast.arima <- forecast(fit.arima, h, lambda=Lw)
   sum_arima <- floor(sum(fcast.arima$mean))
   
-  if (i < 4) {
-    plot(fcast.tbats, main = paste("TBATS:", names(shops)[i]), xlim=c(2014.0,2015.213),ylim=c(0,18000))
-    lines(full_weekly, col="green")
-    lines(cut_weekly, col="black")
-    lines(lowess(full_weekly), col="red", lty = "dashed")
-    legend("topleft", c("Тренировочные", "Реальные", "Предсказанные","Общая"), 
-           col=c("black","green","blue","red"),
-           lty=c("solid","solid","solid","dashed"),
-           cex=1)
-    grid()
-    mtext(paste("Разница (Р - П):",sum_cur, "-",floor(sum_tbats),"=",sum_cur-floor(sum_tbats)), side=4,adj=0)
-    mtext(paste("Дней для предсказание:",days_shift,", Lambda = ",Lw), adj=0)
-  } else {
-    plot(fcast.arima, main = paste("ARIMA:", names(shops)[i]), xlim=c(2014.0,2015.213),ylim=c(0,18000))
-    lines(full_weekly, col="green")
-    lines(cut_weekly, col="black")
-    lines(lowess(full_weekly), col="red", lty = "dashed")
-    legend("topleft", c("Тренировочные", "Реальные", "Предсказанные","Общая"), 
-           col=c("black","green","blue","red"),
-           lty=c("solid","solid","solid","dashed"),
-           cex=1)
-    grid()
-    mtext(paste("Разница (Р - П):",sum_cur, "-",floor(sum_arima),"=",sum_cur-floor(sum_arima)), side=4,adj=0)
-    mtext(paste("Дней для предсказание:",days_shift,", Lambda = ",Lw), adj=0)
-  }
+  cut_num <- as.numeric(cut_weekly)
+  mean_tbats_num <- floor(as.numeric(fcast.tbats$mean))
+  mean_arima_num <- floor(as.numeric(fcast.arima$mean))
+  all_tbats <- c(cut_num, mean_tbats_num)
+  all_arima <- c(cut_num, mean_arima_num)
+
+  start_date <- as.Date(paste(c(start(cut_weekly),1), sep="", collapse=" "), "%Y %U %u")
+  end_date <- as.Date(paste(c(end(cut_weekly),1), sep="", collapse=" "), "%Y %U %u")
+  ix_date <- seq(start_date, end_date + days_shift, "week")
+  title
+  #Рисуем график продаж
+  plot(ix_date,full_weekly, 
+       main = names(shops)[i], sub = NULL, xlab = NA, ylab = "Продажи (тыс.р)",
+       type="l", col="black", xlim=as.numeric(as.Date(c("2014-01-06","2015-03-16"))), axes=FALSE)
+  axis(side=2)
+  axis(side=1, at = ix_date, labels = as.character(ix_date), las=2)
+  box()
+  
+  #lines(ix_date,all, type="l", col="black", xlim=as.numeric(as.Date(c("2014-01-06","2015-03-16"))))
+  l_train <- (length(ix_date) - h)
+  l <- length(ix_date)
+
+  #Добавляем форкасты 
+  lines(ix_date[c(l_train:l)],all_tbats[c(l_train:l)], col="green", lwd=3)
+  lines(ix_date[c(l_train:l)],all_arima[c(l_train:l)], col="blue", lwd=3)
+  
+  #abline(v = ix_date[min(which(ix_date > "2014-01-01"))], lty="dashed", col = "gray")
+  #abline(v = ix_date[min(which(ix_date > "2014-04-01"))], lty="dashed", col = "gray")
+  #abline(v = ix_date[min(which(ix_date > "2014-07-01"))], lty="dashed", col = "gray")
+  #abline(v = ix_date[min(which(ix_date > "2014-10-01"))], lty="dashed", col = "gray")
+  #abline(v = ix_date[min(which(ix_date > "2015-01-01"))], lty="dashed", col = "gray")
+  
+  #Добавляем смазанные данные о продажах
+  lines(ix_date,lowess(full_weekly)$y, col="red", lty = "dashed")
+  
+  #Посчитаем размер ошибки для обоих предсказаний
+  tbats_error <- as.integer(sum_tbats / sum_cur * 100 - 100)
+  arima_error <- as.integer(sum_arima / sum_cur * 100 - 100)
+
+  legend("topleft", c("Реальные", paste("TBATS (",tbats_error,"%)", sep=""),paste("ARIMA (",arima_error,"%)", sep=""),"Lowess"), 
+         col=c("black","green","blue","red"),
+         lty=c("solid","solid","solid","dashed"),
+         cex=1)
+  mtext("Расхождения с реальными данными указаны в процентах", adj=0)
 }
 dev.off()
 
