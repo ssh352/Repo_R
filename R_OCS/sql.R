@@ -1,0 +1,20 @@
+library(RODBC)
+library(plyr)
+con <- odbcDriverConnect("driver={SQL Server};server=cisrepl-v.ocs.ru;database=cisco;trusted_connection=true")
+#con <- odbcDriverConnect("driver={SQL Server};server=cisrepl-v.ocs.ru;database=cisco;uid=reader;pwd=xbnfntkm")
+#con <- odbcConnect("CISREPL", uid='reader', pwd='xbnfntkm')
+res <- sqlQuery(con, 'DELETE FROM clusters')
+data <- read.csv("result.csv", dec=".", header=TRUE, sep = ",", stringsAsFactors=FALSE)
+sqlDf <- data[,c(2,3,1,4,5)]
+for (i in 1:nrow(sqlDf)){
+  print(i)
+  flush.console()
+  values  <- paste(c("'",sqlDf[i,],"'"),collapse="','", sep="")
+  values <- substr(values, 4,nchar(values)-3)
+  res <- sqlQuery(con, paste(c("INSERT INTO clusters VALUES (",values,")"), sep="", collapse = ""))
+}
+#names(sqlDf)
+#sqlDf <- rename(sqlDf, c("daxid"="accountnum","rbu"="rbu","summary"="shipped", "group"="segment"))
+#sqlSave(con, sqlDf, tablename = "clusters", safer = FALSE)
+#data <- rename(data, c("V2"="daxi", "V3"="daxname", "V4"="summary", "V5"="order_rows", "V6"="order_count", "V7"="volume", "V8"="count"))
+odbcCloseAll()
