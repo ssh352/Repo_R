@@ -1,6 +1,8 @@
 setwd("D:/GitHub/Repo_R/DNS")
 
 library(zoo)
+library(xts)
+library(Hmisc)
 
 #Загружаем данные
 data <- read.csv("sales2.csv", dec=",", header=TRUE, sep = ";", stringsAsFactors=FALSE, encoding="UTF-8")
@@ -52,7 +54,7 @@ for(j in 1:length(shops)) {
     } else {
       shops[[j]][i, "week"] <- paste(year,week, sep="")
     }
-    shops[[j]][i, "numofweek"] <- format(as.Date(shops[[j]][i, "date"]), "%w")
+    shops[[j]][i, "numofweek"] <- format(as.Date(shops[[j]][i, "date"]), "%W")
   }
 }
 
@@ -63,57 +65,93 @@ sales_monthly <- list()
 
 #Агрегируем данные понедельно и обрезаем по нужной дате
 #Будем смещаться по датам на начало следующей недели и конец текущей соответственно
-weekly_windows <- function(sales_zoo, group_index, start_date = NULL, end_date = NULL) {
-  print(paste("INPUT: Start date = '", start_date,"', end date = '", end_date,"', length = '", length(sales_zoo), "'", sep = ""))
+#i <- 1
+#test <- t(rbind(as.numeric(shops[[i]]$week),as.character(index(sales_daily[[i]]))))
+#sales_zoo <- sales_daily[[1]]
+#group_index <- shops[[i]]$week
+#end_date <- as.Date(tail(index(sales_daily[[i]]),1)) - days_shift
+#start_date <- NULL
+#end_date = NULL
+#as_ts <- TRUE
+
+sales_zoo < assembly_zoo
+
+weekly_windows <- function(sales_zoo, start_date = NULL, end_date = NULL, as_ts = NULL) {
+  #Группируем по неделям с суммой
+  weekly_sum <- apply.weekly(sales_zoo, sum)
+  print(paste("INPUT: Start date = '", start_date,"', end date = '", end_date,"', length = '", length(weekly_sum), "'", sep = ""))
+
+  #Отфильтруем все неполные недели
+  if (length(weekly_sum) < length(sales_zoo)) {
+    weekly_length <- apply.weekly(sales_zoo, length)
+    weekly_full <- weekly_sum[which(weekly_length == 7)]
+  } else {
+    weekly_full <- weekly_sum
+  }
+  
   #Если дата начала пропущена, то вычисляем ее, смещаться будем внизу
   if (is.null(start_date) == TRUE) {
-    start_date <- as.Date(start(sales_zoo))
+    start_date <- as.Date(start(weekly_full)) - 6
   } else {
     start_date <- as.Date(start_date)
   }
   #Корректируем дату, чтобы период начинался с начала новой недели
-  num_of_week <- as.numeric(format(start_date, "%u"))
-  shift <- (1 %% num_of_week) * (8 - num_of_week)
-  start_date <- start_date + shift
+  #day_of_week <- as.numeric(format(start_date, "%u"))
+  #shift <- (1 %% day_of_week) * (8 - day_of_week)
+  #start_date <- start_date + shift
   
   #А если пропущена дата окончания, то вычислим ее и поднимемсяц вверх до конца предыдущей недели
   if (is.null(end_date)) {
-    end_date <- as.Date(end(sales_zoo))
+    end_date <- as.Date(end(weekly_full))
   } else {
     end_date <- as.Date(end_date)
   }
   #Корректируем дату, чтобы период заканчивался в конце недели
-  num_of_week <- as.numeric(format(end_date, "%u"))
-  shift <- ((num_of_week %% 7) / num_of_week) * num_of_week
-  end_date <- end_date - shift
+  #day_of_week <- as.numeric(format(end_date, "%u"))
+  #shift <- ((day_of_week %% 7) / day_of_week) * day_of_week
+  #end_date <- end_date - shift
 
-  sales <- window(sales_zoo, start=as.Date(start_date), end=as.Date(end_date))
-  ix_start <- min(which(index(sales_zoo) >= start_date))
-  ix_end <- max(which(index(sales_zoo) <= end_date))
-  ix_weekly <- group_index[c(ix_start:ix_end)]
+  sales <- window(weekly_full, start=start_date, end=end_date)
+  #ix_start <- max(which(index(sales_zoo) <= start_date))
+  #ix_end <- min(which(index(sales_zoo) >= end_date))
+  #ix_weekly <- paste(strtrim(index(sales),4),format(index(sales),"%U"), sep="")
+  #ix_weekly <- group_index[c(ix_start:ix_end)]
+  
+  #a <- as.numeric(sales)
+  #agg_weekly <- aggregate(a, list(ix_weekly), sum)
 
-  a <- as.numeric(sales)
-  agg_weekly <- aggregate(a, list(ix_weekly), sum)
+  #start_year <- as.numeric(substr(ix_weekly[1],1,4))
+  #start_week <- as.numeric(substr(ix_weekly[1],5,6))
+  #result <- ts(data = sales, start=c(start_year,start_week), frequency = 52)
+  #result <- sales
+  if (is.null(as_ts) == FALSE) {
+    #Запомним номера недель и скорректируем 0ые недели
+    week_number <- as.numeric(format(index(sales),"%W"))
+    zero_weeks <- which(week_number == 0)
+    week_number[zero_weeks] <- week_number[zero_weeks - 1] + 1
 
-  start_year <- as.numeric(substr(ix_weekly[1],1,4))
-  start_week <- as.numeric(substr(ix_weekly[1],5,6))
-  result <- ts(data = agg_weekly$x, start=c(start_year,start_week), frequency = 52)
-  print(paste("CORRECTED: Start date = '", start_date,"', end date = '", end_date,"', length = '", length(result), "'", sep = ""))
-  return(result)
+    start_year <- as.numeric(format(start(sales),"%Y"))
+    start_week <- week_number[1]
+    
+    sales <- ts(data = as.numeric(sales), start=c(start_year,start_week), frequency=52)
+  }
+  print(paste("CORRECTED: Start date = '", start_date,"', end date = '", end_date,"', length = '", length(sales), "'", sep = ""))
+  return(sales)
 }
 
-#weekly_windows(sales_daily[[1]], shops[[1]]$week, start_date = "2015-02-01")
-
-#weekly_windows(sales_daily[[1]], shops[[1]]$week, start_date = "2015-01-01", end_date = "2015-03-27")
-
+#Теперь создадим нормальные данные по продажам
+#Т.е. вместо пропущенных дат будет дата с количеством продаж "0"
 for(i in 1:length(shops)) {
   #Ежедневные данные
-  sales_daily[[names(shops)[i]]] <- zoo(as.Date(shops[[i]]$X), as.Date(shops[[i]]$date))
-
+  #И добавляем пустые значения, например первое число каждого года
+  sales <- zoo(as.Date(shops[[i]]$X), as.Date(shops[[i]]$date))
+  sales <- na.fill(merge(sales, zoo(,seq(start(sales),end(sales),by="day")), all=TRUE),0)
+  
+  sales_daily[[names(shops)[i]]] <- sales
   a <- as.numeric(sales_daily[[i]])
-
+  
   #еженедельные
-  sales_weekly[[names(shops)[i]]] <- weekly_windows(sales_daily[[i]], shops[[i]]$week)
+  sales_weekly[[names(shops)[i]]] <- weekly_windows(sales_daily[[i]])
   
   #ежемесячные
   ix_monthly <- format(index(sales_daily[[i]]), "%Y%m")
@@ -121,46 +159,114 @@ for(i in 1:length(shops)) {
   sales_monthly[[names(shops)[i]]] <- ts(data = agg_monthly$x, as.numeric(unlist(strsplit(as.character(index(sales_daily[[i]])[1]),"-"))), frequency = 12)
 }
 
+#group_index <- list()
+
+#пересоздадим группировку аггрегации данных
+#for(i in 1:length(shops)) {
+  #sales_date <- index(sales_daily[[i]])
+  #week_number <- format(sales_date,"%W")
+  #years <- format(sales_date,"%Y")
+  #zero_weeks <- which(as.numeric(format(sales_date,"%W")) == 0)
+  #previous_week <- format(as.Date(paste(format(sales_date[zero_weeks],"%Y"),"01","01", sep="-")) - 1,"%W")
+  #previous_year <- format(as.Date(paste(format(sales_date[zero_weeks],"%Y"),"01","01", sep="-")) - 1,"%Y")
+  #week_number[zero_weeks] <- previous_week
+  #years[zero_weeks] <- previous_year
+  #group_index[[i]] <- paste(years,week_number, sep="")
+#}
+
 ################################
 ##  Time series               ##
 ################################
 library(tseries)
 library(forecast)
 
+################################
+##  Обзорные графики          ##
+################################
+
+opar <- par(no.readonly=TRUE)
 #Строим общие графики
-pdf("observed.pdf")
+pdf("observed.pdf", family = "NimbusSan", encoding = "CP1251.enc")
+
+#Нормализуем все продажи и выводим на экран
+for (i in 1:length(sales_weekly)) {
+  s <- scale(sales_weekly[[i]])
+  if (i == 1) {
+    plot(s, col=palette()[i], main="Нормализованые продажи по всем магазинам", ylab="Продажи", xlab="Время")
+  } else {
+    lines(s, col=palette()[i])
+  }
+  s <- tail(s, 46)
+  s <- sqrt(s^2)
+  print(sum(s))
+}
+legend("topleft", names(shops), 
+       col=palette()[c(1:6)],
+       lty="solid",
+       cex=1,
+       )
+
+#И выводим общие данные
 for(i in 1:length(shops)) {
-  plot(sales_daily[[i]], main = names(shops)[i], xlab="days", ylab="Price, RUR", type="l", col="gray", las=2)
+  plot(sales_daily[[i]], main = names(shops)[i], cex=1, xlab=NA, ylab="Продажи (тыс.р)", type="l", col="gray", las=2)
   # Добавляем линию тренда
   model <- lm(as.numeric(sales_daily[[i]]) ~ index(sales_daily[[i]]))
   abline(model, col = "green")
   #Добавляем сглаженную ЛР для данных о продажах
   lines(zoo(lowess(sales_daily[[i]])$y, as.Date(shops[[i]]$date)), col="red")
-  #в случае если у нас есть 2а года продаж и больше добавляем дополнительную информацию
-  if (length(sales_weekly[[i]]) >= 104) {plot(decompose(sales_weekly[[i]]))}
+  #И описание диаграммы
   legend("topleft", c("Продажи", "Тренд", "Сглаженные"), 
          col=c("gray","green","red"),
          lty=c("solid","solid","solid"),
          cex=1)
+  #в случае если у нас есть 2а года продаж и больше добавляем дополнительную информацию
+  if (length(sales_weekly[[i]]) >= 104) {
+    plot(stl(weekly_windows(sales_daily[[i]], as_ts=TRUE), s.window = "periodic"))
+  }
 }
 dev.off()
+#embedFonts("observed.pdf")
 
 #start_date <- index(head(sales_daily[[4]],1))
 #colors <- topo.colors(6)
 
 #Lm <- BoxCox.lambda(sales_monthly[[1]], method="loglik")
 
+#Проверю идею с моделированными продажами
+#Проверка, какой магазин из московских более похож на питерские
+#Сумма продаж
+for (i in 1:length(sales_weekly)) {
+  s <- scale(sales_weekly[[i]])
+  s <- tail(s, 46)
+  d <- floor(sum(sqrt(s^2)))
+  print(paste(names(shops)[i],": ", d, sep=""))
+}
+
+################################
+##  тестируем на реальных     ##
+##  данных                    ##
+################################
+# Запомним временную серию первого магазина, т.к. они больше всего похожи на продажи СПБ магазинов
+#msk <- scale(sales_weekly[[1]])
+#msk <- head(msk, length(msk) - 46)
+msk_restored <- head(sales_weekly[[1]], length(sales_weekly[[1]]) - 46)
+
 #Тестируем модель предсказания
 #Предсказывать будем на последние 56 дней или 8мь недель
 #days_shift <- 32
-pdf("testing.pdf")
+pdf("testing.pdf", family = "NimbusSan", encoding = "CP1251.enc")
 for(i in 1:length(shops)) {
-#for(i in 6:6) {
+  print(paste(names(shops)[i],": Start...", sep=""))
+  #for(i in 6:6) {
+  #i <- 4
   ifelse(i < 4, days_shift <- 49, days_shift <- 35)
+  #days_shift <- 35
   #Тестируем модель предсказания
   #Берем группировку по неделям
-  cut_weekly <- weekly_windows(sales_daily[[i]], shops[[i]]$week, end_date = as.Date(tail(index(sales_daily[[i]]),1)) - days_shift)
-  full_weekly <- weekly_windows(sales_daily[[i]], shops[[i]]$week)
+  cut_weekly <- weekly_windows(sales_daily[[i]], end_date = as.Date(tail(index(sales_daily[[i]]),1)) - days_shift, as_ts = TRUE)
+  cut_weekly_zoo <- weekly_windows(sales_daily[[i]], end_date = as.Date(tail(index(sales_daily[[i]]),1)) - days_shift)
+  full_weekly <- weekly_windows(sales_daily[[i]], as_ts = TRUE)
+  full_weekly_zoo <- weekly_windows(sales_daily[[i]])
   #на сколько недель будем предсказывать
   h <- length(full_weekly) - length(cut_weekly)
   sum_cur <- sum(tail(full_weekly, h))
@@ -170,7 +276,7 @@ for(i in 1:length(shops)) {
   #Lw <- -0.1
 
   #TBATS  
-  fit.tbats <-tbats(cut_weekly, lambda=Lw)
+  fit.tbats <- tbats(cut_weekly, lambda=Lw)
   fcast.tbats <- forecast(fit.tbats, h, lambda=Lw)
   sum_tbats <- sum(fcast.tbats$mean)
   
@@ -185,18 +291,42 @@ for(i in 1:length(shops)) {
   all_tbats <- c(cut_num, mean_tbats_num)
   all_arima <- c(cut_num, mean_arima_num)
 
-  start_date <- as.Date(paste(c(start(cut_weekly),1), sep="", collapse=" "), "%Y %U %u")
-  end_date <- as.Date(paste(c(end(cut_weekly),1), sep="", collapse=" "), "%Y %U %u")
-  ix_date <- seq(start_date, end_date + days_shift, "week")
-  title
+  #Дополнительная тестовая проверка
+  if (i > 3) {
+    #Узнаем коэффиценты скалирования
+    #s <- scale(cut_weekly)
+    #cut_center <- attr(s, "scaled:center")
+    #cut_scale <- attr(s, "scaled:scale")
+    #msk_restored <- msk * cut_scale + cut_center
+    assembly_zoo <- rbind(msk_restored, cut_weekly_zoo)
+    assembly <- weekly_windows(assembly_zoo, as_ts=TRUE)
+    
+    Lw <- BoxCox.lambda(assembly, method="loglik")
+
+    #ARIMA
+    fit.arima <- auto.arima(assembly, lambda=Lw)
+    fcast.arima <- forecast(fit.arima, h, lambda=Lw)
+    sum_arima_assembly <- floor(sum(fcast.arima$mean))
+    
+    mean_arima_assembly_num <- floor(as.numeric(fcast.arima$mean))
+    all_arima_assembly <- c(cut_num, mean_arima_assembly_num)
+  }
+  
+  #start_date <- as.Date(paste(c(start(cut_weekly),1), sep="", collapse=" "), "%Y %U %w")
+  #end_date <- as.Date(paste(c(end(cut_weekly),1), sep="", collapse=" "), "%Y %U %w")
+  ix_date <- index(full_weekly_zoo)
   #Рисуем график продаж
   plot(ix_date,full_weekly, 
        main = names(shops)[i], sub = NULL, xlab = NA, ylab = "Продажи (тыс.р)",
        type="l", col="black", xlim=as.numeric(as.Date(c("2014-01-06","2015-03-16"))), axes=FALSE)
   axis(side=2)
-  axis(side=1, at = ix_date, labels = as.character(ix_date), las=2)
+  tick_dates <- aggregate(ix_date, by=list(strtrim(as.character(ix_date),7)), FUN=min)$x
+  axis(side=1, at = tick_dates, labels = substr(as.character(tick_dates),3,10), las=2)
+  #axis(side=1, at = ix_date, labels = substr(as.character(ix_date),3,10), las=2)
   box()
-  
+  #Добавляем линии для решетки
+  abline(h = axTicks(2),col="gray", lty="dashed")
+  abline(v = tick_dates,col="gray", lty="dashed")
   #lines(ix_date,all, type="l", col="black", xlim=as.numeric(as.Date(c("2014-01-06","2015-03-16"))))
   l_train <- (length(ix_date) - h)
   l <- length(ix_date)
@@ -204,39 +334,70 @@ for(i in 1:length(shops)) {
   #Добавляем форкасты 
   lines(ix_date[c(l_train:l)],all_tbats[c(l_train:l)], col="green", lwd=3)
   lines(ix_date[c(l_train:l)],all_arima[c(l_train:l)], col="blue", lwd=3)
-  
-  #abline(v = ix_date[min(which(ix_date > "2014-01-01"))], lty="dashed", col = "gray")
-  #abline(v = ix_date[min(which(ix_date > "2014-04-01"))], lty="dashed", col = "gray")
-  #abline(v = ix_date[min(which(ix_date > "2014-07-01"))], lty="dashed", col = "gray")
-  #abline(v = ix_date[min(which(ix_date > "2014-10-01"))], lty="dashed", col = "gray")
-  #abline(v = ix_date[min(which(ix_date > "2015-01-01"))], lty="dashed", col = "gray")
-  
+  #Если считали доп модель, то выводим ее
+  if (i > 3) {
+    lines(ix_date[c(l_train:l)],all_arima_assembly[c(l_train:l)], col="magenta", lwd=3)
+  }
   #Добавляем смазанные данные о продажах
   lines(ix_date,lowess(full_weekly)$y, col="red", lty = "dashed")
   
   #Посчитаем размер ошибки для обоих предсказаний
   tbats_error <- as.integer(sum_tbats / sum_cur * 100 - 100)
   arima_error <- as.integer(sum_arima / sum_cur * 100 - 100)
-
-  legend("topleft", c("Реальные", paste("TBATS (",tbats_error,"%)", sep=""),paste("ARIMA (",arima_error,"%)", sep=""),"Lowess"), 
-         col=c("black","green","blue","red"),
-         lty=c("solid","solid","solid","dashed"),
-         cex=1)
+  arima_error_assembly <- as.integer(sum_arima_assembly / sum_cur * 100 - 100)
+  
+  if (i > 3) {
+    legend("topleft", 
+           c("Реальные", 
+             paste("TBATS (",tbats_error,"%)", sep=""),
+             paste("ARIMA (",arima_error,"%)", sep=""),
+             paste("ARIMA модель (",arima_error_assembly,"%)", sep=""),
+             "Lowess"), 
+           col=c("black","green","blue", "magenta","red"),
+           lty=c("solid","solid","solid","solid","dashed"),
+           lwd=2,
+           cex=1)
+  } else {
+    legend("topleft", 
+           c("Реальные", 
+             paste("TBATS (",tbats_error,"%)", sep=""),
+             paste("ARIMA (",arima_error,"%)", sep=""),
+             "Lowess"), 
+           col=c("black","green","blue", "red"),
+           lty=c("solid","solid","solid","dashed"),
+           lwd=2,
+           cex=1)
+  }
   mtext("Расхождения с реальными данными указаны в процентах", adj=0)
+  print(paste(names(shops)[i],": Done!", sep=""))
 }
 dev.off()
 
+################################
+##  Строим прогнозы           ##
+################################
+# Запомним временную серию первого магазина, т.к. они больше всего похожи на продажи СПБ магазинов
+#msk <- scale(sales_weekly[[1]])
+#msk <- head(msk, length(msk) - 46)
+msk_restored <- head(sales_weekly[[1]], length(sales_weekly[[1]]) - 46)
+
 #Теперь переходим непосредственно к прогрнозированию
-pdf("forecast.pdf")
-h <- 8
+pdf("forecast.pdf", family = "NimbusSan", encoding = "CP1251.enc")
+forecasts <- list()
+h <- 5
+#i <- 1
+
 for(i in 1:length(shops)) {
+  print(paste(names(shops)[i],": Start...", sep=""))
   #на сколько недель будем предсказывать
   #ifelse(i < 4, h <- 8, h <- 4)
   #Берем группировку по неделям
-  full_weekly <- weekly_windows(sales_daily[[i]], shops[[i]]$week)
+  full_weekly <- weekly_windows(sales_daily[[i]], as_ts=TRUE)
+  full_weekly_zoo <- weekly_windows(sales_daily[[i]])
   
   #однопараметрическое преобразование Бокса-Кокса (пока не очень понимаю что это)
   Lw <- BoxCox.lambda(full_weekly, method="loglik")
+  #Lw <- 0
   
   #TBATS  
   fit.tbats <-tbats(full_weekly, lambda=Lw)
@@ -247,45 +408,112 @@ for(i in 1:length(shops)) {
   fit.arima <- auto.arima(full_weekly, lambda=Lw)
   fcast.arima <- forecast(fit.arima, h, lambda=Lw)
   sum_arima <- floor(sum(fcast.arima$mean))
+  #acc_arima <- accuracy(fit.arima)
   
-  #if (i < 4) {
-    plot(fcast.tbats, main = paste("TBATS:", names(shops)[i]), xlim=c(2014.0,2015.346),ylim=c(0,18000))
-    lines(lowess(full_weekly), col="red", lty = "dashed")
-    legend("topleft", c("Реальные", "Предсказанные","Общая"), 
-           col=c("black","blue","red"),
-           lty=c("solid","solid","dashed"),
+  full_num <- as.numeric(full_weekly)
+  mean_tbats_num <- floor(as.numeric(fcast.tbats$mean))
+  mean_arima_num <- floor(as.numeric(fcast.arima$mean))
+  all_tbats <- c(full_num, mean_tbats_num)
+  all_arima <- c(full_num, mean_arima_num)
+
+  #В случае с питерскими магазинами апгрейдим модель, добавляя данные о продажах
+  if (i > 3) {
+    assembly_zoo <- rbind(msk_restored, full_weekly_zoo)
+    assembly <- weekly_windows(assembly_zoo, as_ts=TRUE)
+    Lw <- BoxCox.lambda(assembly, method="loglik")
+
+    fit.arima <- auto.arima(assembly, lambda=Lw)
+    fcast.arima <- forecast(fit.arima, h, lambda=Lw)
+    sum_arima_A <- floor(sum(fcast.arima$mean))
+    
+    mean_arima_num_A <- floor(as.numeric(fcast.arima$mean))
+    all_arima_A <- c(full_num, mean_arima_num_A)
+    forecasts[[i]] <- all_arima_A
+  } else {
+    forecasts[[i]] <- all_arima
+  }
+  
+  #Создаем индексы с датами для предсказания
+  start_date <- as.Date("2014-01-06")
+  end_date <- end(full_weekly_zoo) + h * 7
+  ix_date_forecast <- index(zoo(,seq(start(full_weekly_zoo),end_date,by="week")))
+  ix_date <- index(full_weekly_zoo)
+  #Рисуем график продаж
+  plot(ix_date,full_weekly, 
+       main = names(shops)[i], sub = NULL, xlab = NA, ylab = "Продажи (тыс.р)",
+       type="l", col="black", xlim=c(start_date,end_date), axes=FALSE)
+  axis(side=2)
+  tick_dates <- aggregate(ix_date_forecast, by=list(strtrim(as.character(ix_date_forecast),7)), FUN=min)$x
+  axis(side=1, at = tick_dates, labels = substr(as.character(tick_dates),3,10), las=2)
+  #axis(side=1, at = ix_date, labels = substr(as.character(ix_date),3,10), las=2)
+  box()
+  #Добавляем линии для решетки
+  abline(h = axTicks(2),col="gray", lty="dashed")
+  abline(v = tick_dates,col="gray", lty="dashed")
+  #lines(ix_date,all, type="l", col="black", xlim=as.numeric(as.Date(c("2014-01-06","2015-03-16"))))
+  l_train <- (length(ix_date_forecast) - h)
+  l <- length(ix_date_forecast)
+  
+  #Добавляем форкасты 
+  #lines(ix_date_forecast,all_tbats, col="green", lwd=3)
+  lines(ix_date_forecast[c(l_train:l)],all_tbats[c(l_train:l)], col="green", lwd=3)
+  lines(ix_date_forecast[c(l_train:l)],all_arima[c(l_train:l)], col="blue", lwd=3)
+  if (i > 3) {
+    lines(ix_date_forecast[c(l_train:l)],all_arima_A[c(l_train:l)], col="magenta", lwd=3)
+  }
+  
+  #Добавляем смазанные данные о продажах
+  #lines(ix_date,lowess(full_weekly)$y, col="red", lty = "dashed")
+  
+  if (i > 3) {
+    legend("topleft", 
+           c("Реальные", 
+             "TBATS",
+             "ARIMA",
+             "ARIMA модель",
+             "Lowess"), 
+           col=c("black","green","blue", "magenta","red"),
+           lty=c("solid","solid","solid","solid","dashed"),
+           lwd=2,
            cex=1)
-    grid()
-    mtext(paste("Недель для предсказание:",h,", Lambda = ",Lw), adj=0)
-  #} else {
-    plot(fcast.arima, main = paste("ARIMA:", names(shops)[i]), xlim=c(2014.0,2015.346),ylim=c(0,18000))
-    lines(lowess(full_weekly), col="red", lty = "dashed")
-    legend("topleft", c("Реальные", "Предсказанные","Общая"), 
-           col=c("black","blue","red"),
-           lty=c("solid","solid","dashed"),
+  } else {
+    legend("topleft", 
+           c("Реальные", 
+             "TBATS",
+             "ARIMA",
+             "Lowess"), 
+           col=c("black","green","blue", "red"),
+           lty=c("solid","solid","solid","dashed"),
+           lwd=2,
            cex=1)
-    grid()
-    mtext(paste("Недель для предсказание:",h,", Lambda = ",Lw), adj=0)
-  #}
+  }
+  print(paste(names(shops)[i],": Done!", sep=""))
 }
 dev.off()
 
-sales_month <- aggregate(as.numeric(sales_daily[[1]]), by=list(substr(as.character(index(sales_daily[[1]])),1,7)), FUN=sum)
-sales_monthly_ts <- ts(data=sales_month[,2], start=as.numeric(unlist(strsplit(as.character(index(sales_daily[[1]])[1]),"-"))), frequency = 12)
+################################
+##  CSV                       ##
+################################
+#Создаем табличку с прогнозами
+df <- data.frame(replicate(46 + h,numeric(0), simplify = F))
+#names(df) <- as.character(tail(index(sales_weekly[[1]]),46 + h))
+for (i in 1:length(shops)) {
+  df[i,] <- tail(forecasts[[i]],46 + h)
+}
 
-#однопараметрическое преобразование Бокса-Кокса (пока не очень понимаю что это)
-Lm <- BoxCox.lambda(sales_monthly_ts, method="loglik")
-h <- 5
+end_date <- end(sales_weekly[[1]]) + h * 7
+ix_date_forecast <- index(zoo(,seq(start(sales_weekly[[1]]),end_date,by="week")))
 
-#TBATS  
-fit.tbats <-tbats(sales_monthly_ts, lambda=Lm)
-fcast.tbats <- forecast(fit.tbats, h, lambda=Lm)
-sum_tbats <- sum(fcast.tbats$mean)
-plot(fcast.tbats)
+dimnames(df)[[1]] <- names(shops)
+dimnames(df)[[2]] <- as.character(tail(ix_date_forecast,46 + h))
+dimnames(df)[[2]][c(47:51)] <- paste("P ",tail(dimnames(df)[[2]],h),sep="")
 
-#ARIMA
-fit.arima <- auto.arima(sales_monthly_ts, lambda=Lm)
-fcast.arima <- forecast(fit.arima, h, lambda=Lm)
-sum_arima <- floor(sum(fcast.arima$mean))
-plot(fcast.arima)
+write.csv(df, file="forecasts.csv")
 
+fcast <- fcast_monthly(zoo_series = apply.monthly(sales_daily[[1]], FUN=sum), fcast.period = 6, test.period = 6,
+                       main_text = "клин", ylab_text = "Продажи (Тыс.р.)", xlab_text = "Время")
+
+sales <- rbind(head(sales_daily[[1]],-length(sales_daily[[4]])),sales_daily[[4]])
+
+fcast <- fcast_monthly(zoo_series = apply.monthly(sales, FUN=sum), fcast.period = 3, test.period = 3,
+                       main_text = "SPB", ylab_text = "Продажи (Тыс.р.)", xlab_text = "Время")
