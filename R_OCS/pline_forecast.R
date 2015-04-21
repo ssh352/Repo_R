@@ -71,11 +71,14 @@ fcast_monthly <- function(zoo_series, fcast.period = 3, test.period = 3,
   #Добавляем линии для решетки
   abline(h = axTicks(2),col="gray", lty="dashed")
   abline(v = dates[seq(3, length(dates), 3)],col="gray", lty="dashed")
+
+  model <- lm(as.numeric(total) ~ as.numeric(dates))
+  abline(model, col = "green")
   
   legend("topleft", 
-         c("Реальные", "lowess"), 
-         col=c("black","red"),
-         lty=c("solid","dashed"),
+         c("Real", "Trend line", "lowess"), 
+         col=c("black","green", "red"),
+         lty=c("solid","solid","dashed"),
          lwd=2,
          cex=1)
   
@@ -161,7 +164,7 @@ fcast_monthly <- function(zoo_series, fcast.period = 3, test.period = 3,
     lim_end <- lim_start + months(h + 6)
   }
   plot(dates, total, 
-       main = paste("Тестирование модели : ", main_text, sep=""), sub = NULL, xlab = xlab_text, ylab = ylab_text,
+       main = paste("Testing : ", main_text, sep=""), sub = NULL, xlab = xlab_text, ylab = ylab_text,
        xlim=c(lim_start,lim_end), type="l", col=palette()[1])
   lines(tail(test_dates, h+1),fc$arima$mean, type="l", col=palette()[2], lwd=3)
   lines(tail(test_dates, h+1),fc$tbats$mean, type="l", col=palette()[3], lwd=3)
@@ -171,7 +174,7 @@ fcast_monthly <- function(zoo_series, fcast.period = 3, test.period = 3,
   abline(v = dates,col="gray", lty="dashed")
   
   legend("topleft", 
-         c("Реальные", 
+         c("Real", 
            paste("ARIMA (",fc$arima$error,"%)", sep=""),
            paste("TBATS (",fc$tbats$error,"%)", sep=""),
            "Lowess"), 
@@ -209,7 +212,7 @@ fcast_monthly <- function(zoo_series, fcast.period = 3, test.period = 3,
   lim_start <- date_end - years(1)
   lim_end <- last_day(floor_date(date_end,"month") + months(h+1))
   plot(dates, total, 
-       main = paste("Прогноз : ", main_text, sep=""), sub = NULL, xlab = xlab_text, ylab = ylab_text,
+       main = paste("Forecast : ", main_text, sep=""), sub = NULL, xlab = xlab_text, ylab = ylab_text,
        axes=FALSE,
        xlim=c(lim_start,lim_end), type="l", col=palette()[1])
   axis(side=2)
@@ -224,7 +227,7 @@ fcast_monthly <- function(zoo_series, fcast.period = 3, test.period = 3,
   lines(dates, lowess(total)$y, type="l", lty="dashed", col=palette()[4])
   
   legend("topleft", 
-         c("Реальные", 
+         c("Real", 
            paste("ARIMA (",fc$arima$error,"%, lvl=",fc$arima$level,")", sep=""),
            paste("TBATS (",fc$tbats$error,"%, lvl=",fc$tbats$level,")", sep=""),
            "Lowess"), 
@@ -254,7 +257,7 @@ odbcCloseAll()
 res[is.na(res)] <- 0
 
 index <- tail(names(res), length(names(res)) - 2)
-dates_ix <- last_day(as.Date(paste(substr(index,1,4),substr(index,5,6),"01", sep="-")))
+dates <- last_day(as.Date(paste(substr(index,1,4),substr(index,5,6),"01", sep="-")))
 
 #Обрезаем неполный месяц в конце
 if (Sys.Date() < tail(dates, 1)) {
@@ -268,7 +271,7 @@ pdf("ocs.pdf", family = "NimbusSan", encoding = "CP1251.enc")
 ################################
 ##  Отчет по циско            ##
 ################################
-pdf("cisco.pdf", family = "NimbusSan", encoding = "CP1251.enc")
+pdf("cisco.pdf", encoding = "CP1251.enc")
 #Теперь по всей компании в целом
 ocs <- filter(res_cut, rbu != "Unknown")
 ocs <- select(ocs, -pline, -rbu)
@@ -276,7 +279,7 @@ ocs_sum <- colSums(ocs) / 1000000
 ocs_zoo <- zoo(ocs_sum, dates)
 
 fcast_ocs <- fcast_monthly(zoo_series = ocs_zoo, fcast.period = 12, test.period = 12,
-                           main_text = "OCS", ylab_text = "Продажи (млн.дол.)", xlab_text = "Время")
+                           main_text = "OCS", ylab_text = "Sales (MM $)", xlab_text = "Time")
 
 #Группируем данные по филиалам
 cisco <- filter(res_cut, pline == "CDU" | pline == "CDL" |  pline == "CSD" |  pline == "CTD" | pline == "CNU" | pline == "CNL" |  pline == "CTN" |  pline == "CIP" |  pline == "CIS")
@@ -296,7 +299,7 @@ rbu_fcast <- list()
 
 total_zoo <- zoo(rowSums(all_rbu), dates) / 1000
 fcast <- fcast_monthly(zoo_series = total_zoo, fcast.period = 12, test.period = 12,
-                       main_text = "Департамент Cisco", ylab_text = "Продажи (Тыс.дол.)", xlab_text = "Время")
+                       main_text = "Cisco department", ylab_text = "Sales (K $)", xlab_text = "Time")
 
 rbu_fcast[["all"]] <- fcast
 
@@ -305,8 +308,9 @@ for (i in 1:ncol(all_rbu)) {
   if (tail(rbu_zoo,1) > 0) {
     print(paste("Обрабатываем:", names(all_rbu)[i]))
     rbu_zoo <- rbu_zoo[c(min(which(rbu_zoo > 0)):length(rbu_zoo))]
+    rbu_name <- paste("F", substr(names(all_rbu)[i], 2,3), sep="")
     rbu_fcast[[names(all_rbu)[i]]] <- fcast_monthly(zoo_series = rbu_zoo, fcast.period = 6, test.period = 6,
-                           main_text = paste(names(all_rbu)[i], "Cisco"), ylab_text = "Продажи (Тыс.дол.)", xlab_text = "Время")
+                           main_text = paste(rbu_name, "Cisco"), ylab_text = "Sales (K $)", xlab_text = "Time")
   } else {
     print(paste("РБЮ:", names(all_rbu)[i], "пропущено."))
   }
@@ -317,12 +321,12 @@ fcast_f04 <- colSums(select(filter(res_cut, rbu == "Ф04"), -rbu, -pline))
 fcast_f04_zoo <- zoo(fcast_f04, dates) / 1000
 fcast_f04_zoo <- fcast_f04_zoo[c(min(which(fcast_f04_zoo > 0)):length(fcast_f04_zoo))]
 fcast <- fcast_monthly(zoo_series = fcast_f04_zoo, fcast.period = 6, test.period = 6,
-                       main_text = "Ф04", ylab_text = "Продажи (Тыс.дол.)", xlab_text = "Время")
+                       main_text = "Ф04", ylab_text = "Sales (K $)", xlab_text = "Time")
 
 
 fcast_f04_cisco <- all_rbu[,4]
 fcast <- fcast_monthly(zoo_series = fcast_f04_cisco, fcast.period = 6, test.period = 6,
-                       main_text = "Ф04 Cisco", ylab_text = "Продажи (Тыс.дол.)", xlab_text = "Время")
+                       main_text = "Ф04 Cisco", ylab_text = "Sales (K $)", xlab_text = "Time")
 
 ################################
 ##  Отчет по EMC              ##
@@ -357,6 +361,48 @@ fcast_f04_emc <- fcast_monthly(zoo_series = emc_f04_zoo, fcast.period = 6, test.
                            main_text = "Ф04 EMC", ylab_text = "Продажи (Тыс.дол.)", xlab_text = "Время")
 dev.off()
 
+################################
+##  Отчет для Новикова        ##
+################################
+pdf("ocs.pdf", encoding = "CP1251.enc")
+#Теперь по всей компании в целом
+ocs <- filter(res_cut, rbu != "Unknown")
+ocs <- select(ocs, -pline, -rbu)
+ocs_sum <- colSums(ocs) / 1000000
+ocs_zoo <- zoo(ocs_sum, dates)
+
+fcast_ocs <- fcast_monthly(zoo_series = ocs_zoo, fcast.period = 12, test.period = 12,
+                           main_text = "OCS", ylab_text = "Sales (MM $)", xlab_text = "Time")
+
+#Группируем данные по филиалам
+cisco <- filter(res_cut, pline == "CDU" | pline == "CDL" |  pline == "CSD" |  pline == "CTD" | pline == "CNU" | pline == "CNL" |  pline == "CTN" |  pline == "CIP" |  pline == "CIS")
+cisco_rbu <- select(cisco, -pline)
+cisco_rbu_sum <- ddply(cisco_rbu, "rbu", numcolwise(sum))
+
+#Собираем все данные по продажам
+all_rbu <- zoo(,dates)
+for (i in 2:nrow(cisco_rbu_sum)) {
+  rbu <- zoo(as.integer(select(cisco_rbu_sum[i,],-rbu)), dates)
+  all_rbu <- cbind(all_rbu, rbu)
+  names(all_rbu)[length(names(all_rbu))] <- as.character(cisco_rbu_sum[i,1])
+}
+
+#Делаем прогноз по Cisco департаменту
+rbu_fcast <- list()
+
+total_zoo <- zoo(rowSums(all_rbu), dates) / 1000
+fcast <- fcast_monthly(zoo_series = total_zoo, fcast.period = 12, test.period = 12,
+                       main_text = "Cisco department", ylab_text = "Sales (K $)", xlab_text = "Time")
+
+#Посчитаем EMC
+emc <- filter(res_cut, pline == "EMC")
+#Считаем весь департамент в целом
+emc_all<- colSums(select(emc, -rbu, -pline)) / 1000
+emc_all_zoo <- zoo(emc_all, dates)
+fcast_all_emc <- fcast_monthly(zoo_series = emc_all_zoo, fcast.period = 6, test.period = 6,
+                               main_text = "EMC department", ylab_text = "Sales (K $)", xlab_text = "Time")
+
+dev.off()
 ################################
 ##  CSV                       ##
 ################################
