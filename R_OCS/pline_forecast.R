@@ -15,8 +15,8 @@ last_day <- function(date) {
   ceiling_date(date, "month") + months(1) - days(1)
 }
 
-zoo_series <- fcast_f04_cisco
-h <- 6
+zoo_series = emc_f04_zoo
+h <- 12
 b <- 6
 #zoo_series = apply.monthly(sales_daily[[1]]
 #h <- 3
@@ -113,12 +113,14 @@ fcast_monthly <- function(zoo_series, fcast.period = 3, test.period = 3,
   dim(fcasts.mean) <- c(length(fcasts.mean),1)
   fcasts.all <- data.frame(cbind(fcast.tbats$lower, fcasts.mean, fcast.tbats$upper))
   fcasts.all <- apply(fcasts.all, 2, FUN=as.double)
+  #Корректируем сравниваемые величины, чтобы не сравинивали с пустой
+  fcasts.all.compare <- fcasts.all[c(1:b),]
   #Смотрим насколько сходится по сумме прогноз
-  err <- abs(as.double(colSums(fcasts.all) / fc$sum * 100 - 100))
+  err <- abs(as.double(colSums(fcasts.all.compare) / fc$sum * 100 - 100))
   #Считаем корреляцию между настоящими данными и прогнозируемыми
-  test.vector <- as.double(tail(total,h))
-  test.cor <- 100 - as.double(sapply(1:ncol(fcasts.all), function(i){
-    cor(test.vector, as.double(fcasts.all[,i])) * 100
+  test.vector <- as.double(tail(total,b))
+  test.cor <- 100 - as.double(sapply(1:ncol(fcasts.all.compare), function(i){
+    cor(test.vector, as.double(fcasts.all.compare[,i])) * 100
   }))
   #Теперь сводим сумму по предсказанию и корреляцию  
   err_cor <- colSums(rbind(err,test.cor))
@@ -139,12 +141,14 @@ fcast_monthly <- function(zoo_series, fcast.period = 3, test.period = 3,
   dim(fcasts.mean) <- c(length(fcasts.mean),1)
   fcasts.all <- data.frame(cbind(fcast.arima$lower, fcasts.mean, fcast.arima$upper))
   fcasts.all <- apply(fcasts.all, 2, FUN=as.double)
+  #Корректируем сравниваемые величины, чтобы не сравинивали с пустой
+  fcasts.all.compare <- fcasts.all[c(1:b),]
   #Смотрим насколько сходится по сумме прогноз
-  err <- abs(as.double(colSums(fcasts.all) / fc$sum * 100 - 100))
+  err <- abs(as.double(colSums(fcasts.all.compare) / fc$sum * 100 - 100))
   #Считаем корреляцию между настоящими данными и прогнозируемыми
-  test.vector <- as.double(tail(total,h))
-  test.cor <- 100 - as.double(sapply(1:ncol(fcasts.all), function(i){
-    cor(test.vector, as.double(fcasts.all[,i])) * 100
+  test.vector <- as.double(tail(total,b))
+  test.cor <- 100 - as.double(sapply(1:ncol(fcasts.all.compare), function(i){
+    cor(test.vector, as.double(fcasts.all.compare[,i])) * 100
   }))
   #Теперь сводим сумму по предсказанию и корреляцию  
   err_corr <- colSums(rbind(err,test.cor))
@@ -242,6 +246,7 @@ fcast_monthly <- function(zoo_series, fcast.period = 3, test.period = 3,
   }
   return(
     list(
+      dates=tail(fdates,h),
       arima=tail(fc$arima$mean, -1), 
       arima_err=fc$arima$error, 
       tbats=tail(fc$tbats$mean, -1), 
@@ -257,16 +262,15 @@ odbcCloseAll()
 res[is.na(res)] <- 0
 
 index <- tail(names(res), length(names(res)) - 2)
-dates <- last_day(as.Date(paste(substr(index,1,4),substr(index,5,6),"01", sep="-")))
+ix_dates <- last_day(as.Date(paste(substr(index,1,4),substr(index,5,6),"01", sep="-")))
 
 #Обрезаем неполный месяц в конце
 if (Sys.Date() < tail(dates, 1)) {
-  dates <- head(dates_ix,-1)
+  dates <- head(ix_dates,-1)
   res_cut <- res[,c(1:(length(res)-1))]
+} else {
+  dates <- ix_dates  
 }
-
-pdf("ocs.pdf", family = "NimbusSan", encoding = "CP1251.enc")
-
 
 ################################
 ##  Отчет по циско            ##
@@ -339,7 +343,7 @@ ocs_sum <- colSums(ocs) / 1000000
 ocs_zoo <- zoo(ocs_sum, dates)
 
 fcast_ocs <- fcast_monthly(zoo_series = ocs_zoo, fcast.period = 12, test.period = 12,
-                           main_text = "OCS", ylab_text = "Продажи (млн.дол.)", xlab_text = "Время")
+                           main_text = "OCS", ylab_text = "Sales (MM $)", xlab_text = "Time")
 
 #Посчитаем EMC
 emc <- filter(res_cut, pline == "EMC")
@@ -347,7 +351,7 @@ emc <- filter(res_cut, pline == "EMC")
 emc_all<- colSums(select(emc, -rbu, -pline)) / 1000
 emc_all_zoo <- zoo(emc_all, dates)
 fcast_all_emc <- fcast_monthly(zoo_series = emc_all_zoo, fcast.period = 6, test.period = 6,
-                               main_text = "Департамент EMC", ylab_text = "Продажи (Тыс.дол.)", xlab_text = "Время")
+                               main_text = "EMC Department", ylab_text = "Sales (K &)", xlab_text = "Time")
 
 #Считаем наш филиал
 emc_f04 <- as.numeric(emc[5,c(3:ncol(emc))])
@@ -357,8 +361,42 @@ emc_f04_zoo <- emc_f04_zoo / 1000
 #Скорректируем данные по выбросам
 emc_f04_zoo[as.Date("2012-06-30")] <- emc_f04_zoo[as.Date("2012-06-30")] - 3100
 emc_f04_zoo[as.Date("2012-07-31")] <- emc_f04_zoo[as.Date("2012-06-30")] - 400
-fcast_f04_emc <- fcast_monthly(zoo_series = emc_f04_zoo, fcast.period = 6, test.period = 6,
-                           main_text = "Ф04 EMC", ylab_text = "Продажи (Тыс.дол.)", xlab_text = "Время")
+fcast_f04_emc <- fcast_monthly(zoo_series = emc_f04_zoo, fcast.period = 12, test.period = 12,
+                           main_text = "F04 EMC", ylab_text = "Sales (K $)", xlab_text = "Time")
+dev.off()
+
+names <- c("Depart", "level", "Err %", as.character(fcast_f04_emc$dates))
+row_emc_arima <- c("EMC arima", names(fcast_f04_emc$arima_err), fcast_f04_emc$arima_err[1], floor(fcast_f04_emc$arima))
+row_emc_tbats <- c("EMC tbats", names(fcast_f04_emc$tbats_err), fcast_f04_emc$tbats_err[1], floor(fcast_f04_emc$tbats))
+
+################################
+##  Отчет по HP               ##
+################################
+pdf("HP.pdf", encoding = "CP1251.enc")
+#Теперь по всей компании в целом
+ocs <- filter(res_cut, rbu != "Unknown")
+ocs <- select(ocs, -pline, -rbu)
+ocs_sum <- colSums(ocs) / 1000000
+ocs_zoo <- zoo(ocs_sum, dates)
+
+fcast_ocs <- fcast_monthly(zoo_series = ocs_zoo, fcast.period = 12, test.period = 12,
+                           main_text = "OCS", ylab_text = "Sales (MM $)", xlab_text = "Time")
+
+#Посчитаем HP
+hp <- filter(res_cut, pline == "HPR" | pline == "HPE" | pline == "HPS")
+#Считаем весь департамент в целом
+hp_all<- colSums(select(hp, -rbu, -pline)) / 1000
+hp_all_zoo <- zoo(hp_all, dates)
+fcast_all_hp <- fcast_monthly(zoo_series = hp_all_zoo, fcast.period = 6, test.period = 6,
+                               main_text = "HP Department (HPR,HPE,HPS)", ylab_text = "Sales (K &)", xlab_text = "Time")
+
+#Считаем наш филиал
+hp_f04 <- as.numeric(hp[5,c(3:ncol(hp))])
+hp_f04_zoo <- zoo(hp_f04, dates)
+hp_f04_zoo <- hp_f04_zoo[c(min(which(hp_f04_zoo > 0)):length(hp_f04_zoo))]
+hp_f04_zoo <- hp_f04_zoo / 1000
+fcast_f04_hp <- fcast_monthly(zoo_series = hp_f04_zoo, fcast.period = 6, test.period = 6,
+                               main_text = "F04 HP (HPR, HPE, HPS)", ylab_text = "Sales (K &)", xlab_text = "Time")
 dev.off()
 
 ################################
@@ -403,6 +441,47 @@ fcast_all_emc <- fcast_monthly(zoo_series = emc_all_zoo, fcast.period = 6, test.
                                main_text = "EMC department", ylab_text = "Sales (K $)", xlab_text = "Time")
 
 dev.off()
+
+################################
+##  Отчет для кости           ##
+################################
+pdf("f04_and_emc.pdf", encoding = "CP1251.enc")
+
+#Теперь по нашему филиалу только
+f04 <- filter(res_cut, rbu == "Ф04")
+f04 <- select(f04, -rbu, -pline)
+f04_sum <- colSums(f04) / 1000
+f04_zoo <- zoo(f04_sum, dates)
+f04_zoo <- f04_zoo[c(min(which(f04_zoo > 0)):length(f04_zoo))]
+
+fcast_all_f04 <- fcast_monthly(zoo_series = f04_zoo, fcast.period = 12, test.period = 12,
+                               main_text = "F04", ylab_text = "Sales (K $)", xlab_text = "Time")
+
+#Считаем наш филиал
+emc_f04 <- colSums(select(filter(res_cut, rbu == "Ф04" & pline == "EMC"), -rbu, -pline))
+emc_f04_zoo <- zoo(emc_f04, dates)
+emc_f04_zoo <- emc_f04_zoo[c(min(which(emc_f04_zoo > 0)):length(emc_f04_zoo))]
+emc_f04_zoo <- emc_f04_zoo / 1000
+#Скорректируем данные по выбросам
+emc_f04_zoo[as.Date("2010-12-31")] <- emc_f04_zoo[as.Date("2010-12-31")] - 1500
+emc_f04_zoo[as.Date("2012-06-30")] <- emc_f04_zoo[as.Date("2012-06-30")] - 3100
+emc_f04_zoo[as.Date("2012-07-31")] <- emc_f04_zoo[as.Date("2012-07-31")] - 400
+fcast_f04_emc <- fcast_monthly(zoo_series = emc_f04_zoo, fcast.period = 12, test.period = 12,
+                               main_text = "F04 EMC", ylab_text = "Sales (K $)", xlab_text = "Time")
+dev.off()
+
+names <- c("Depart", "level", "Err %", as.character(fcast_f04_emc$dates))
+row_emc_arima <- c("EMC arima", names(fcast_f04_emc$arima_err), fcast_f04_emc$arima_err[1], floor(fcast_f04_emc$arima))
+row_emc_tbats <- c("EMC tbats", names(fcast_f04_emc$tbats_err), fcast_f04_emc$tbats_err[1], floor(fcast_f04_emc$tbats))
+row_f04_arima <- c("f04 arima", names(fcast_all_f04$arima_err), fcast_all_f04$arima_err[1], floor(fcast_all_f04$arima))
+row_f04_tbats <- c("f04 tbats", names(fcast_all_f04$tbats_err), fcast_all_f04$tbats_err[1], floor(fcast_all_f04$tbats))
+
+df <- as.data.frame(rbind(row_f04_arima,row_f04_tbats,row_emc_arima,row_emc_tbats))
+names(df) <- df_names
+#install.packages("xlsx")
+library(xlsx)
+write.xlsx(df, "f04_and_emc.xlsx")
+
 ################################
 ##  CSV                       ##
 ################################
