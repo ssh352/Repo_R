@@ -160,3 +160,26 @@ fit <- cforest(as.factor(Survived) ~ Pclass + Sex + Age + SibSp + Parch + Fare +
 Prediction <- predict(fit, test, OOB=TRUE, type = "response")
 submit <- data.frame(PassengerId = test$PassengerId, Survived = Prediction)
 write.csv(submit, file = "firstforest.csv", row.names = FALSE)
+
+
+#Регрессионый анализ
+train2 <- train
+train2$Ticket <- NULL
+train2$Name <- NULL
+train2$Sex <- as.integer(as.factor(train2$Sex))
+train2$Cabin <- NULL
+train2$Title <- as.integer(as.factor(train2$Title))
+train2$Surname <- as.integer(as.factor(train2$Surname))
+train2$FamilyID <- as.integer(as.factor(train2$FamilyID))
+train2$FamilyID2 <- as.integer(as.factor(train2$FamilyID2))
+train2$Embarked <- as.integer(as.factor(train2$Embarked))
+head(train2)
+tail(train2)
+
+#              I(Pclass^2) + I(Sex^2) + I(Age^2) + I(SibSp^2) + I(Parch^2) + I(Fare^2) + I(Embarked^2) + I(Title^2) + I(FamilyID2^2),
+lmfit <- lm(Survived ~ Pclass + Sex + Age + SibSp + Parch + Fare + Embarked + Title + FamilyID2,
+            data = train2)
+summary(lmfit)
+library(car)
+scatterplotMatrix(~ Pclass + Sex + Age + SibSp + Parch + Fare + Embarked + Title + FamilyID2,
+                  data = train2)

@@ -20,14 +20,14 @@ for(a in seq(0,3,0.01)) {
   }
 }
 
-#Собственный вектор
+#Собственный вектор (6, -3, 6) - Собственное значение 9
 v1 <- c( 6, -2,  2)
 v2 <- c(-2,  5,  0)
 v3 <- c( 2,  0,  7)
 V <- as.matrix(rbind(v1,v2,v3))
 
 s <- eigen(V)
-
+s
 #Предел последовательности - 0.5
 #http://kontromat.ru/?page_id=1346
 options(digits = 15)
@@ -55,6 +55,7 @@ tail(c)
 c
 
 #Интеграл -  скорее всего 3.64547
+options(digits = 6)
 x <- seq(0,1,0.1)
 y <- x^2 * exp(3*x)
 integrand <- function(x) {x^2 * exp(3*x)}
@@ -71,6 +72,7 @@ factorial(3)
 
 
 #Солдатики - 17640
+library(gtools)
 perm <- permutations(3,13,c("red","blue","green"), set=TRUE, repeats.allowed = TRUE)
 ix <- sapply(1:nrow(perm), function(i) {
   r <- length(which(perm[i,] == "red"))
