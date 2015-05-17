@@ -582,10 +582,8 @@ embedFonts("observed_monthly.pdf")
 msk_restored <- head(sales_monthly_zoo[[1]], -9)
 
 #Тестируем модель предсказания
-#Предсказывать будем на последние 56 дней или 8мь недель
-#days_shift <- 32
 pdf("testing.pdf", family = "NimbusSan", encoding = "CP1251.enc")
-i <- 1
+#Для тестирования будем использовать данные за последние 12 месяцев
 back <- 12
 forward <- 6
 for(i in 1:length(shops)) {
@@ -594,23 +592,25 @@ for(i in 1:length(shops)) {
   #Берем группировку по неделям
   #cut_weekly <- weekly_windows(sales_daily[[i]], end_date = as.Date(tail(index(sales_daily[[i]]),1)) - days_shift, as_ts = TRUE)
   cut_zoo <- head(sales_monthly_zoo[[i]], -back)
+  start_ts <- as.numeric(unlist(strsplit(strtrim(start(cut_zoo),7),"-")))
+  cut_ts <- ts(as.numeric(cut_zoo),start=start_ts, frequency = 12)
   #full_weekly <- weekly_windows(sales_daily[[i]], as_ts = TRUE)
   full_zoo <- sales_monthly_zoo[[i]]
   #на сколько недель будем предсказывать
-  sum_cur <- sum(tail(full_weekly, h))
+  sum_cur <- sum(tail(full_zoo, forward))
   
   #однопараметрическое преобразование Бокса-Кокса (пока не очень понимаю что это)
-  Lw <- BoxCox.lambda(cut_weekly, method="loglik")
+  Lw <- BoxCox.lambda(cut_ts, method="loglik")
   #Lw <- -0.1
   
   #TBATS  
-  fit.tbats <- tbats(cut_weekly, lambda=Lw)
+  fit.tbats <- tbats(cut_zoo, lambda=Lw)
   fcast.tbats <- forecast(fit.tbats, h, lambda=Lw)
   sum_tbats <- sum(fcast.tbats$mean)
   
   #ARIMA
-  fit.arima <- auto.arima(cut_weekly, lambda=Lw)
-  fcast.arima <- forecast(fit.arima, h, lambda=Lw)
+  fit.arima <- auto.arima(cut_ts, lambda=Lw)
+  fcast.arima <- forecast(fit.arima, forward, lambda=Lw)
   sum_arima <- floor(sum(fcast.arima$mean))
   
   cut_num <- as.numeric(cut_weekly)
