@@ -12,7 +12,7 @@ library("pander")
 library("sjPlot")
 library("knitr")
 #install.packages(c("vcd","knitr","pander"))
-
+#memisc, lmtest, ggplot2, foreign, vcd, devtools, hexbin, pander, sjPlot, knitr
 h <- diamonds
 glimpse(h)
 
@@ -96,6 +96,24 @@ n <- 25
 F <- ((RSSr - RSSur) / r) / RSSur / (n - kur)
 qf(0.99, df1 = r, df2= n)
 #H_0 гипотеза не отвергается
+
+#Q 2
+# RSS = TSS - ESS
+r <- 2
+n <- 25
+kur <- 3
+ESSr <- 105
+TSSr <- 200
+ESSur <- 175
+RSSur <- TSSr - ESSur
+RSSr <- TSSr - ESSr
+
+F <- ((RSSr - RSSur) / r) / RSSur / (n - kur)
+qf(0.95, df1 = r, df2= n)
+
+#Q 3
+#Varˆ(θ^|X)=Varˆ(a⋅β^1+b⋅β^2|X)=a2⋅Varˆ(β^1|X)+b2⋅Varˆ(β^2|X)+2⋅a⋅b⋅Covˆ(β^1,β^2|X)
+(-90)^2 * 21.9 + 1.8^2 * 0.01 + 2 * (-90) * 1.8 * (-0.46)
 
 #Q 11
 d <- diamonds
