@@ -158,3 +158,56 @@ summary(m20)
 sjp.lm(m20)
 
 c(126 - 2 * 27.76 * 0.9, 126 + 2 * 27.76 * 0.9)
+
+# Lection
+#2.1.12
+f <- lm(data=swiss, Fertility~Agriculture+Catholic)
+p <- fitted(f)
+summary(f)
+c <- coef(f)
+k <- length(c)
+n <- nrow(swiss)
+v <- vcov(f)
+#ggpairs(swiss)
+sigma <- sqrt(sum(f$residuals^2)/(n-k))
+se <- round(sd(p)/sqrt(n),2)
+
+alpha <- 0.05
+se.a <- sqrt(v[2,2])
+t.cr <- round(qt(1 - alpha/2, df=44), 2)
+#Доверительный интервал для бета
+round(c(c[2] - se.a * t.cr, c[2] + se.a * t.cr),2)
+
+#2.1.13
+hi.l <- qchisq(1 - alpha/2, df=44)
+hi.r <- qchisq(alpha/2, df=44)
+
+#Доверительный интервал для Sigma
+round(c(sigma^2*(n-k)/hi.l, sigma^2*(n-k)/hi.r),2)
+
+#2.1.14
+#Проверка гипотезы о коэффициенте бета Agriculture
+f <- lm(data=swiss, Fertility~Agriculture+Catholic)
+c <- coef(f)
+k <- length(c)
+n <- nrow(swiss)
+sjp.lm(f)
+
+alpha <- 0.05
+v <- vcov(f)
+var.a <- v[2,2]
+se.a <- sqrt(var.a)
+beta.a <- c[2]
+t <- as.numeric(beta.a / se.a)
+# Метод 1
+between(0, beta.a - se.a * t.cr, beta.a + se.a * t.cr) # true - Гипотеза отвергается
+
+# Метод 2
+t.cr <- round(qt(1 - alpha/2, df=n-k), 2)
+# Интервал для Т статистики, между Ткрит гипотеза Hо, true - отвергается
+round(c(-t.cr, t.cr),2)
+between(t, -t.cr, t.cr)
+
+# Метод 3
+p.value <- (1 - pt(t, df=n-k)) * 2
+p.value > alpha # true - гипотеза отвергается
