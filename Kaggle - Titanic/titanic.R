@@ -3,9 +3,16 @@
 setwd("D:/GitHub/Repo_R/Kaggle - Titanic/")
 
 library(dplyr)
+library(vcd)
 
 train <- read.csv("train.csv")
 test <- read.csv("test.csv")
+
+str(train)
+mosaic(data=train, ~Survived+Sex+Pclass, shade=TRUE)
+
+cor(select(train,Survived,Pclass))
+df <- select(train,Survived,Sex,Pclass)
 
 #Количество погибших и выживших
 summary(train$Survived)
