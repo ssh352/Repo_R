@@ -25,6 +25,7 @@ PCbiplot <- function(PC, xy=c(1, 2), colors=c('black', 'black', 'red', 'red')) {
   )
   plot <- plot + coord_equal() + geom_text(data=datapc, aes(x=v1, y=v2, label=varnames), size = 5, vjust=1, color=colors[3])
   plot <- plot + geom_segment(data=datapc, aes(x=0, y=0, xend=v1, yend=v2), arrow=arrow(length=unit(0.2,"cm")), alpha=0.75, color=colors[4])
+  plot <- plot + geom_segment(data=datapc, aes(x=0, y=0, xend=v1, yend=v2), arrow=arrow(length=unit(0.2,"cm")), alpha=0.75, color=colors[4])
   return(plot)
 }
 
@@ -107,3 +108,54 @@ for (i in 1:(l-1)) {
 dev.off()
 options(warn=0)
 embedFonts("rbu04_PCA_cut.pdf") 
+
+#######################
+PC <- pca.partners
+xy <- c(2, 3)
+colors=c('black', 'black', 'red', 'red')
+
+x <- paste("PC", xy[1], sep="")
+y <- paste("PC", xy[2], sep="")
+# PC being a prcomp object
+data <- data.frame(obsnames=row.names(PC$x), PC$x)
+plot <- ggplot(data, aes_string(x=x, y=y)) + geom_text(alpha=.4, size=3, aes(label=obsnames), color=colors[1])
+plot <- plot + theme_bw()
+plot <- plot + geom_hline(aes(0), size=.2) + geom_vline(aes(0), size=.2, color=colors[2])
+datapc <- data.frame(varnames=rownames(PC$rotation), PC$rotation)
+mult <- min(
+  (max(data[,y]) - min(data[,y])/(max(datapc[,y])-min(datapc[,y]))),
+  (max(data[,x]) - min(data[,x])/(max(datapc[,x])-min(datapc[,x])))
+)
+datapc <- transform(datapc,
+                    v1 = .7 * mult * (get(x)),
+                    v2 = .7 * mult * (get(y))
+)
+#Добавляем текст
+#plot <- plot + coord_equal() + geom_text(data=datapc, aes(x=v1, y=v2, label=varnames), size = 5, vjust=1, color=colors[3])
+#Добавялем стрелочки измерений
+#plot <- plot + geom_segment(data=datapc, aes(x=0, y=0, xend=v1, yend=v2), arrow=arrow(length=unit(0.2,"cm")), alpha=0.75, color=colors[4])
+plot + geom_segment(data=datapc, aes(x=0, y=0, xend=v1, yend=v2), arrow=arrow(length=unit(0.2,"cm")), alpha=0.75, color=colors[4])
+
+plot
+
+newplot <- plot
+x.pca.p <- subset(datapc, PC2 > 0, select=PC2)
+v.p <- sort(x.pca.p[,1]) * mult * 0.4
+x.pca.n <- subset(datapc, PC2 < 0, select=PC2)
+v.n <- sort(x.pca.n[,1], decreasing = TRUE) * mult * 0.4
+data.line <- rbind(
+  cbind(x.pca.p, start=head(cumsum(c(0, v.p)), -1), end=cumsum(v.p) ),
+  cbind(x.pca.n, start=head(cumsum(c(0, v.n)), -1), end=cumsum(v.n) )
+)
+n <- nrow(data.line)
+data.line <- cbind(
+  data.line,
+  color=rep(c("red","green"), round(n/2), length.out = n),
+  name=dimnames(data.line)[[1]]
+)
+newplot + geom_segment(data=data.line, aes(x=start, y=0, xend=end, yend=0, color=color), arrow=arrow(length=unit(0.2,"cm")), alpha=0.75)
+newplot + geom_segment(data=data.line, x=data.line$start, y=0, xend=data.line$end, yend=0, color=data.line$color, size=0.75, 
+                       arrow=arrow(length=unit(0.2,"cm")), alpha=0.75)
+
+newplot <- newplot + coord_equal() + geom_text(x=coord$x + shift/2, y=coord$y + 0.5, label=, size = 5, angle=90, hjust=0, color=c[j])
+newplot
