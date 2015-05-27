@@ -93,16 +93,39 @@ plot(roc.data$cutoffs, y=roc.data$tpr, type="line")
 lines(roc.data$cutoffs, roc.data$fpr)
 
 #Test
+#Q 1
+2 * (-200 - (-210)) # LR
+qchisq(0.9, df=1) # hi crit
+#IF lr > hi cr, H0 отвергается
+
 #Q 2
 x <- 4
-round(1 / (1 + exp(-(2 - 0.3 * x))), 2)
+round(pnorm(2 - 0.3 * x), 2)
+
+#Q 3
+m.h <- 5
+l.m <- -4
+se.l <- (-(l.m)^-1)^(1/2)
+c(m.h - 2 * se.l, m.h + 2 * se.l)
+
+#Q 4
+b1 <- -1
+b2 <- 0.1
+b3 <- 0.05
+z <- 10
+x <- (-b1 * b3 - b3 * b3 * z) / (b2 * b3)
+
+#Q 6
+n <- 300
+P.x = 7.78 * 10^-20
+a <- round(n / (n * log(2) - log(P.x)), 2)
 
 #Q 12
-m_logit2 <- glm(data=t, survived ~ sex + age + fare + sibsp, family=binomial(link="logit"), x=TRUE)
+m_logit2 <- glm(data=t, survived ~ age + I(age^2) + sex + fare + sibsp, family=binomial(link="logit"), x=TRUE)
 summary(m_logit2)
 
 #q 13
-m13 <- glm(data=t, survived ~ age + I(age^2) + sex + fare + sibsp + parch, family=binomial(link="logit"), x=TRUE)
+m13 <- glm(data=t, survived ~ age + I(age^2) + sex + fare + I(fare^2) + sibsp, family=binomial(link="logit"), x=TRUE)
 summary(m13)
 A <- m13$coefficients[3]
 B <- m13$coefficients[2]
@@ -110,7 +133,7 @@ age_optimal <- (-B/(2*A))
 round(age_optimal, digits = 1)
 
 #Q 14
-m14 <- glm(data=t, survived ~ age + I(age^2) + sex + fare + I(fare^2) + sibsp, family=binomial(link="logit"), x=TRUE)
+m14 <- glm(data=t, survived ~ age + I(age^2) + sex + fare + sibsp, family=binomial(link="logit"), x=TRUE)
 summary(m14)
 round(confint(m14, level=0.95)["sibsp", 1], 2)
 
@@ -118,21 +141,35 @@ round(confint(m14, level=0.95)["sibsp", 1], 2)
 m15 <- glm(data=t, survived ~ age + I(age^2) + sex + fare + sibsp, family=binomial(link="logit"), x=TRUE)
 summary(m15)
 
-nd <- data.frame(age=05, sex="male", sibsp=2, fare=200)
-predict(m15, nd, se = TRUE)
+nd <- data.frame(age=40, sex="male", sibsp=2, fare=200)
+round(predict(m15, newdata = nd, type="response", se.fit=TRUE)$fit, 2)
 
 #Q 16
-m16.fit <- predict(m15, nd, se = TRUE)$fit
-m16.se <- predict(m15, nd, se = TRUE)$se.fit
+pr <- predict(m15, newdata = nd, type="response", se.fit=TRUE)
 
-round(m16.fit - 1.96 * m16.se, 2)
+round(pr$fit - 1.96 * pr$se.fit, 2)
+
+#Q 17
+maBina(m15)
 
 #q 18
-m18.1 <- glm(data=t, survived ~ age + I(age^2) + sex + fare + I(fare^2) + sibsp + parch, family=binomial(link="logit"), x=TRUE)
-m18.2 <- glm(data=t, survived ~ age + I(age^2) + sex + sibsp + parch, family=binomial(link="logit"), x=TRUE)
+d <- dplyr::select(t, age, sibsp, sex, fare, parch, survived) 
+d_clean <- na.omit(d) 
+m18.1 <- glm(data=d_clean, survived ~ age + I(age^2) + sex + fare + I(fare^2) + sibsp, family=binomial(link="logit"))
+m18.2 <- glm(data=d_clean, survived ~ age + I(age^2) + sex + sibsp, family=binomial(link="logit"))
 
-lrtest(m18.1, m18.2)
+lrtest(m18.1, c(4,5))
 
 #Q 19
-d <- select(t, age, sex, lass, survived, fare) %>% na.omit()
-m_logit2 <- glm(data=t2, survived ~ sex + age, family=binomial(link="logit"), x=TRUE)
+d_clean <- dplyr::select(t, age, sex, sibsp, survived, fare) %>% na.omit()
+m19 <- glm(data=d_clean, survived ~ age + I(age^2) + sex + fare + sibsp, family=binomial(link="logit"))
+d_clean$probs <- predict(m19, type="response") 
+d_clean$pr.survived <- ifelse(d_clean$probs > 0.65, 1, 0)
+
+cm <- table(d_clean$survived, d_clean$probs > 0.65)
+round((cm[1,1] + cm[2,2]) / sum(cm), 2)
+#table(d_clean$pr.survived, d_clean$survived)
+
+#Q 20
+m20 <- glm(data=t, survived ~ age + I(age^2) + sex + fare + sibsp, family=binomial(link="logit"))
+summary(m20)
