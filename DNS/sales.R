@@ -603,6 +603,51 @@ for(i in 1:length(shops)) {
   Lw <- BoxCox.lambda(cut_ts, method="loglik")
   #Lw <- -0.1
   
+  #Custom ARIMA
+  sales.monthly <- ts(sales_monthly_zoo[[i]], start=as.numeric(unlist(strsplit(strtrim(start(sales_monthly_zoo[[i]]),7),"-"))), frequency = 12)
+  tsdisplay(sales.monthly)
+  m.arima <- arima(sales.monthly, order=c(2,1,2), seasonal = c(1,1,1))
+  summary(m.arima)
+  plot(sales.monthly)
+  lines(fitted(m.arima), col="green")
+  plot(forecast(m.arima, h=6))
+  
+  t.value <- data.frame(ar=0, i=1, ma=0, s1 = 0, s2 = 0, s3 = 0, aic = 0, v12 = 0)
+  
+  library(dplyr)
+  r <- 0
+  for (i in 0:3) {
+    for (j in 0:3) {
+      for (k in 0:1) {
+        for (s1 in 0:2) {
+          for (s2 in 0:2) {
+            for (s3 in 0:2) {
+              r <- r + 1
+              print(c(r, i, k, j, s1, s2, s3))
+              aic <- NA
+              v12 <- NA
+              try({
+                m.arima <- arima(sales.monthly, order=c(i,k,j), seasonal = c(s1,s2,s3))
+                aic <- AIC(m.arima)
+                v12 <- fitted(m.arima)[34]
+              })
+              t.value[r, ] <- c(i, k, j, s1, s2, s3, aic, v12)
+            }
+          }
+        }
+      }
+    }
+  }
+  library(sqldf)
+  res <- na.omit(t.value)
+  sqldf("SELECT * FROM res ORDER BY aic DESC")
+  sqldf("SELECT * FROM res ORDER BY v12")
+  #filter(na.omit(t.value), aic < (min(aic) + 5) &  v12 == max(v12))
+  m.arima <- arima(sales.monthly, order=c(1,0,3), seasonal = c(1,1,2))
+  #plot(sales.monthly)
+  plot(forecast(m.arima, h=6))
+  lines(fitted(m.arima), col="green")
+  
   #TBATS  
   fit.tbats <- tbats(cut_zoo, lambda=Lw)
   fcast.tbats <- forecast(fit.tbats, h, lambda=Lw)
@@ -610,6 +655,7 @@ for(i in 1:length(shops)) {
   
   #ARIMA
   fit.arima <- auto.arima(cut_ts, lambda=Lw)
+  tsdiag(fit.arima)
   fcast.arima <- forecast(fit.arima, forward, lambda=Lw)
   sum_arima <- floor(sum(fcast.arima$mean))
   
