@@ -117,3 +117,68 @@ factorial(n)/(factorial(n-m))
 
 
 factorial(9) / (factorial(6) * factorial(3))
+
+v1 <- c(0, 1)
+v2 <- c(1, 0)
+V <- as.matrix(rbind(v1,v2))
+
+s <- eigen(V)
+s
+
+v1 <- c(1, 2, 3)
+v2 <- c(3, 1, 2)
+v3 <- c(2, 3, 1)
+V <- as.matrix(rbind(v1,v2,v3))
+determinant(V)
+
+v1 <- c(0, 1, 2, 3, 4, 5)
+v2 <- c(1, 0, 1, 2, 3, 4)
+v3 <- c(2, 1, 0, 1, 2, 3)
+v4 <- c(3, 2, 1, 0, 1, 2)
+v5 <- c(4, 3, 2, 1, 0, 1)
+v6 <- c(5, 4, 3, 2, 1, 0)
+V <- as.matrix(rbind(v1,v2,v3, v4, v5, v6))
+exp(determinant(V)$modulus)
+qr(V)
+s <- eigen(V)
+s
+j <- 0
+i <- 2
+s <- integer(0)
+for (i in 2:12) {
+  V <- NULL
+  v <- c(i:1, 0:i)
+  for (j in 0:i) {
+    v1 <- v[(j+1):(j+i+1)]
+    V <- rbind(V, v1)
+    #V <- rbind(v[j:(j+i+1)], V)
+    #print(v1)
+  }
+  V <- as.matrix(V)
+  d <- exp(determinant(V)$modulus)
+  r <- qr(V)$rank
+  s[i-1] <- d
+  print(paste(i+1, sum(V)/2, d, r, sep=" "))
+}
+s / 4
+
+n <- 12
+2^(n-2) * factorial(n-1)/factorial(n-2)
+
+k <- 1:100
+x <- 1
+prod(cos(x * 2^-k))
+plot(cos(0:10), type="l")
+
+s <- sample(0:10, 10000, replace = T) / 10
+s <- c(0,10)
+table(s)
+sd(s)
+var(s)
+v <- (0:10)
+v<- c(0,1)
+sd(v)
+var(v)
+sum((v - mean(v))^2) / (length(v) - 1)
+sum(v^2) / (length(v) - 1) - sum(rep(mean(v), length(v))^2) / (length(v) - 1)
+
