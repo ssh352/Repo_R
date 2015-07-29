@@ -11,32 +11,26 @@ d <- t(rbind(s1,s2))
 
 i <- 0
 d.cut <- d
-while (nrow(d.cut) > 1 && i < 6) {
+while (nrow(d.cut) > 1 && i < 8) {
   i <- i + 1
-  div <- ceiling(l1 / (2^i))
+  div <- round(l1 / (2^i))
 
-  s.lr.down <- sum((head(d.cut[,1], div) - tail(d.cut[,2], div))^2)
-  s.rl.down <- sum((head(d.cut[,2], div) - tail(d.cut[,1], div))^2)
+  sum.up <- sum((head(d.cut[,1], div) - head(d.cut[,2], div))^2)
+  sum.down <- sum((tail(d.cut[,2], div) - tail(d.cut[,1], div))^2)
   
-  if (s.lr.down < s.rl.down) {
-    min.sum <- 1
-    max.sum <- 2
+  if (sum.up < sum.down) {
+    d.cut <- head(d.cut, div)
   } else {
-    min.sum <- 2
-    max.sum <- 1
+    d.cut <- tail(d.cut, div)
   }
   
-  d.cut <- cbind(
-            head(d.cut[,min.sum], div),
-            tail(d.cut[,max.sum], div)
-          )
-  
-  print(paste(i, div, head(d.cut,1), tail(d.cut,1)))
+  print(paste(i, div, nrow(d.cut)))
 }
 d.cut
 head(d.cut)
 head(d)
 
+d.cut[,1] - d.cut[,2]
 
 A <- diag(1:10)
 A[1,3] <- 1
@@ -53,3 +47,12 @@ for (i in 1:n) {
     s <- v[i]
   }
 }
+
+x <- t(as.matrix(sample(-1:1, 3)))
+A <- matrix(sample(1:3, 9, replace = T), nrow = 3, ncol = 3)
+x %*% t(x)
+x %*% A %*% t(x)
+
+
+mean(runif(100000, 0, 1))
+

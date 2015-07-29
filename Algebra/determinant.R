@@ -108,8 +108,8 @@ c[2] / sum(c)
 c[1] / sum(c)
 
 
-m <- 3
-n <- 9
+m <- 2
+n <- 256
 #Сочетание
 factorial(n)/(factorial(n-m) * factorial(m))
 #Размещение
