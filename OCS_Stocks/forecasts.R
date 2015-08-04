@@ -6,6 +6,7 @@ library(sqldf)
 library(memisc)
 library(lmtest)
 library(forecast)
+library(sqldf)
 
 setwd("D:/GitHub/Repo_R/OCS_Stocks")
 data.file <- "stocks CDU 2015-07-30.xlsx"
@@ -208,30 +209,35 @@ pn.selected <- sqldf("SELECT pn, level,
     and pn NOT LIKE 'CON-%'
   ORDER BY num_level, pn")
 
-i <- 1
+i <- 64
 #sapply(1:nrow(pn.selected), function(i) {
-sapply(1:10, function(i) {
+pn.fcasts <- t(sapply(1:nrow(pn.selected), function(i) {
   pn <- as.character(pn.selected$pn[i])
+  lvl <- as.character(pn.selected$level[i])
   
   x <- as.numeric(sales[pn,])
   n <- length(x)
   if (sum(x) > 0) {
     min.v <- min(which(x != 0))
-    min.non.zero <- ifelse((n-min.v) >= 12, min.v, (n-12))
+    min.non.zero <- ifelse((n-min.v) >= 12, min.v, (n-11))
   } else {
-    min.non.zero <- (n - 12)
+    min.non.zero <- (n - 11)
   }
   x.corr <- x[min.non.zero:n]
+  n.corr <- length(x.corr)
   
   date.start <- as.numeric(unlist(strsplit(names(sales[pn,min.non.zero:n])[1],"-")))
   date.end <- as.Date(tail(names(sales[pn,min.non.zero:n]), 1))
   pn.ts <- ts(x.corr, start=date.start, frequency = 12)
-  arima.fit <- arima(pn.ts, order=c(1,2,1), seasonal = c(0,2,1))
-  f.sales <- data.frame(forecast(arima.fit, 3)$mean)
-  names(f.sales) <- tail(seq(date.end, by="month", length.out = 4), 3)
-  row <- cbind(pn.selected[i,c(1,2)], f.sales)
-  return(f.sales)
-})
+  ifelse(n.corr <= 12, i.seasonal <- 0, i.seasonal <- 1)
+  arima.fit <- arima(pn.ts, order=c(0,0,1), seasonal = c(0,i.seasonal,0))
+  f.sales <- round(forecast(arima.fit, 3)$mean)
+  #f.dates <- tail(seq(date.end, by="month", length.out = 4), 3)
+  row <- c(pn, lvl, f.sales)
+  #colnames(row) <- c("pn", "level", f.dates)
+  cat(paste(c(i,row,'\r\n'), collapse = '\t\t'))
+  return(row)
+}))
 
 pn <- "AIR-PWRINJ4="
 plot(dates, as.numeric(sales[pn,]), type="l")
@@ -282,3 +288,35 @@ for (o1 in 0:3) {
 res <- na.omit(t.value)
 sqldf("SELECT * FROM res ORDER BY aic DESC")
 sqldf("SELECT * FROM res ORDER BY v12 DESC")
+
+
+#######
+# 10ть пн для FNOW
+pn.fnow <- sqldf("SELECT 
+  pn, level,
+  CASE 
+    WHEN level LIKE 'green' THEN 1
+    WHEN level LIKE 'yellow' THEN 2
+    WHEN level LIKE 'orange' THEN 3
+    WHEN level LIKE 'red' THEN 4
+    ELSE 0
+  END AS num_level
+  FROM pns WHERE 
+    pn NOT LIKE '%Bundle%' 
+    and pn NOT LIKE 'L-%' 
+    and pn NOT LIKE 'R-%' 
+    and pn NOT LIKE 'ESA-%' 
+    and pn NOT LIKE 'WSA-%' 
+    and pn NOT LIKE 'LIC-%' 
+    and pn NOT LIKE 'ISE-%' 
+    and pn NOT LIKE '%DELIVERY%' 
+    and pn NOT LIKE 'CON-%'
+    and level = 'green'
+  ORDER BY num_level, pn
+")
+
+pns.fnow <- sample(pn.fnow, 10)
+ix <- as.character(pns.fnow[1,1])
+sales[ix,]
+stocks[ix,]
+orders[ix,]
