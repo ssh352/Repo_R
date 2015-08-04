@@ -7,6 +7,8 @@ library(memisc)
 library(lmtest)
 library(forecast)
 library(sqldf)
+library(lubridate)
+library(Hmisc)
 
 setwd("D:/GitHub/Repo_R/OCS_Stocks")
 data.file <- "stocks CDU 2015-07-30.xlsx"
@@ -320,3 +322,49 @@ ix <- as.character(pns.fnow[1,1])
 sales[ix,]
 stocks[ix,]
 orders[ix,]
+
+n <- ncol(orders)
+j <- 40
+
+pn <- ix
+j <- 1
+df.fnow <- data.frame(id=numeric(0), nn=character(), name=character(0), stockid=character(0),
+                      date=character(0), sale=numeric(0), other=numeric(0), income=numeric(0),
+                      reserved=numeric(0), order=numeric(0), price=numeric(0), sum=numeric(0),
+                      o.price=numeric(0), cost=numeric(0), stock=numeric(0), stringsAsFactors=FALSE)
+stock.other <- 0
+stock.order <- 0
+for(j in 1:n) {
+  date.start <- as.Date(names(sales[pn,])[j])
+  days.in.month <- monthDays(date.start)
+  month.sales <- sales[pn, j]
+  ifelse(j==1, month.stock <- 0, month.stock <- stocks[pn, j-1])
+  day.sales <- ceiling(month.sales / days.in.month)
+  for(i in 1:days.in.month){
+    day.date <- date.start + days(i - 1)
+    month.sales <- month.sales - day.sales
+    ifelse(month.sales >= 0, current.day.sales <- day.sales, current.day.sales <- 0)
+    month.stock <- month.stock - current.day.sales
+    if(month.stock < 0) {
+      stock.order <- abs(month.stock)
+      month.stock <- 0
+    }
+    df.fnow <- rbind(df.fnow, data.frame(id=i, nn=pn, name=pn, stockid="Sklad1", 
+                            date=as.character(day.date), sale=current.day.sales, other=stock.other, 
+                            income=0, reserved=0, order=stock.order, price=100, sum=100*current.day.sales, 
+                            p.price=50, cost=50 * current.day.sales, stock=month.stock))
+    stock.order <- 0
+    stock.other <- 0
+  }
+  stock.order <- stocks[pn, j] - month.stock
+  if (stock.order > 0) {
+    stock.other <- 0
+  }else{
+    stock.other <- abs(stock.order)
+    stock.order <- 0
+  }
+}
+
+df.fnow[, c("nn", "date", "sale", "order", "other", "stock")]
+df.fnow[c(1:700), c("nn", "date", "sale", "order", "other", "stock")]
+as.numeric(sales[pn,])
