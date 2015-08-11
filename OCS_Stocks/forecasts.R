@@ -234,12 +234,15 @@ pn.fcasts <- t(sapply(1:nrow(pn.selected), function(i) {
   ifelse(n.corr <= 12, i.seasonal <- 0, i.seasonal <- 1)
   arima.fit <- arima(pn.ts, order=c(0,0,1), seasonal = c(0,i.seasonal,0))
   f.sales <- round(forecast(arima.fit, 3)$mean)
+  #f.sales[1] <- f.sales[1] - tail(as.numeric(stocks[pn,]), 1)
   #f.dates <- tail(seq(date.end, by="month", length.out = 4), 3)
   row <- c(pn, lvl, f.sales)
   #colnames(row) <- c("pn", "level", f.dates)
   cat(paste(c(i,row,'\r\n'), collapse = '\t\t'))
   return(row)
 }))
+
+write.csv(cbind(pn.fcasts,stocks[ix,72]), "fcast.csv")
 
 pn <- "AIR-PWRINJ4="
 plot(dates, as.numeric(sales[pn,]), type="l")
@@ -294,77 +297,113 @@ sqldf("SELECT * FROM res ORDER BY v12 DESC")
 
 #######
 # 10ть пн для FNOW
+ixstocks <- as.data.frame(cbind(dimnames(stocks)[[1]], index(stocks)))
+names(ixstocks) <- c("pn", "ix")
 pn.fnow <- sqldf("SELECT 
-  pn, level,
+  p.pn, p.level, s.ix,
   CASE 
-    WHEN level LIKE 'green' THEN 1
-    WHEN level LIKE 'yellow' THEN 2
-    WHEN level LIKE 'orange' THEN 3
-    WHEN level LIKE 'red' THEN 4
+    WHEN p.level LIKE 'green' THEN 1
+    WHEN p.level LIKE 'yellow' THEN 2
+    WHEN p.level LIKE 'orange' THEN 3
+    WHEN p.level LIKE 'red' THEN 4
     ELSE 0
   END AS num_level
-  FROM pns WHERE 
-    pn NOT LIKE '%Bundle%' 
-    and pn NOT LIKE 'L-%' 
-    and pn NOT LIKE 'R-%' 
-    and pn NOT LIKE 'ESA-%' 
-    and pn NOT LIKE 'WSA-%' 
-    and pn NOT LIKE 'LIC-%' 
-    and pn NOT LIKE 'ISE-%' 
-    and pn NOT LIKE '%DELIVERY%' 
-    and pn NOT LIKE 'CON-%'
-    and level = 'green'
-  ORDER BY num_level, pn
+  FROM pns AS p
+  LEFT JOIN ixstocks AS s ON p.pn = s.pn
+  WHERE 
+    p.pn NOT LIKE '%Bundle%' 
+    and p.pn NOT LIKE 'L-%' 
+    and p.pn NOT LIKE 'R-%' 
+    and p.pn NOT LIKE 'ESA-%' 
+    and p.pn NOT LIKE 'WSA-%' 
+    and p.pn NOT LIKE 'LIC-%' 
+    and p.pn NOT LIKE 'ISE-%' 
+    and p.pn NOT LIKE '%DELIVERY%' 
+    and p.pn NOT LIKE 'CON-%'
+    and p.level <> 'red'
+  ORDER BY num_level, p.pn
 ")
 
-pns.fnow <- sample(pn.fnow, 10)
-ix <- as.character(pns.fnow[1,1])
-sales[ix,]
-stocks[ix,]
-orders[ix,]
+ix <- as.numeric(as.character(pn.fnow$ix))
 
+pns.fnow <- pn.fnow
+pns.fnow <- pn.fnow[11:20,]
 n <- ncol(orders)
-j <- 40
+#df.fnow <- as.matrix(date=numeric(0), sale=numeric(0), other=numeric(0), income=numeric(0),
+                      #reserved=numeric(0), order=numeric(0), price=numeric(0), sum=numeric(0),
+                      #cost=numeric(0), c.price=numeric(0), stock=numeric(0))
 
-pn <- ix
-j <- 1
-df.fnow <- data.frame(id=numeric(0), nn=character(), name=character(0), stockid=character(0),
-                      date=character(0), sale=numeric(0), other=numeric(0), income=numeric(0),
-                      reserved=numeric(0), order=numeric(0), price=numeric(0), sum=numeric(0),
-                      o.price=numeric(0), cost=numeric(0), stock=numeric(0), stringsAsFactors=FALSE)
-stock.other <- 0
-stock.order <- 0
-for(j in 1:n) {
-  date.start <- as.Date(names(sales[pn,])[j])
-  days.in.month <- monthDays(date.start)
-  month.sales <- sales[pn, j]
-  ifelse(j==1, month.stock <- 0, month.stock <- stocks[pn, j-1])
-  day.sales <- ceiling(month.sales / days.in.month)
-  for(i in 1:days.in.month){
-    day.date <- date.start + days(i - 1)
-    month.sales <- month.sales - day.sales
-    ifelse(month.sales >= 0, current.day.sales <- day.sales, current.day.sales <- 0)
-    month.stock <- month.stock - current.day.sales
-    if(month.stock < 0) {
-      stock.order <- abs(month.stock)
-      month.stock <- 0
+df.fnow <- matrix(nrow=nrow(pns.fnow)*n*31, ncol=12)
+count <- 0
+for(k in 1:nrow(pns.fnow)){
+#for(k in 1:2){
+  pn <- as.character(pns.fnow$pn[k])
+  ix <- as.numeric(pns.fnow$ix[k])
+  cat(c(k, pn, ": "))
+  sale.other <- 0
+  stock.order <- 0
+  for(j in 1:n) {
+    cat(".")
+    date.start <- as.Date(names(sales[pn,])[j])
+    days.in.month <- monthDays(date.start)
+    month.sales <- sales[pn, j]
+    ifelse(j > 1, month.stock <- stocks[pn, j-1], month.stock <- 0)
+    day.sales <- ceiling(month.sales / days.in.month)
+    for(i in 1:days.in.month){
+      count <- count + 1
+      day.date <- date.start + days(i - 1)
+      month.sales <- month.sales - day.sales
+      ifelse(month.sales >= 0, current.day.sales <- day.sales, current.day.sales <- 0)
+      if(month.stock < 0) {
+        stock.order <- abs(month.stock)
+        month.stock <- 0
+      } else {
+        month.stock <- month.stock - current.day.sales      
+      }
+      df.fnow[count, ] <- c(index=ix, date=day.date, sale=as.numeric(current.day.sales), other=sale.other, 
+                              income=0, reserved=0, order=stock.order, price=100, sum=100*current.day.sales, 
+                              cost=50, c.price=50 * current.day.sales, stock=month.stock)
+      stock.order <- 0
+      sale.other <- 0
     }
-    df.fnow <- rbind(df.fnow, data.frame(id=i, nn=pn, name=pn, stockid="Sklad1", 
-                            date=as.character(day.date), sale=current.day.sales, other=stock.other, 
-                            income=0, reserved=0, order=stock.order, price=100, sum=100*current.day.sales, 
-                            p.price=50, cost=50 * current.day.sales, stock=month.stock))
-    stock.order <- 0
-    stock.other <- 0
+    stock.order <- stocks[pn, j] - month.stock
+    if (stock.order > 0) {
+      sale.other <- 0
+    }else{
+      sale.other <- abs(stock.order)
+      stock.order <- 0
+    }
   }
-  stock.order <- stocks[pn, j] - month.stock
-  if (stock.order > 0) {
-    stock.other <- 0
-  }else{
-    stock.other <- abs(stock.order)
-    stock.order <- 0
-  }
+  cat("\r\n")
 }
+sales.data <- as.data.frame(na.omit(df.fnow))
+pns.fnow$ix <- as.numeric(pns.fnow$ix)
+dimnames(sales.data)[[2]] <- c("ix", "date", "sale", "other", "income", "reserved", "order", "price", "sum", "cost", "c.price", "stock")
+sales.data$date <- as.Date(sales.data$date, origin = "1970-01-01")
+sales.data <- merge(pns.fnow[, c("ix", "pn","level","num_level")], sales.data, by = intersect(names(pns.fnow[, c("ix", "pn","level","num_level")]), names(sales.data)))
+sales.data$nn <- sales.data$pn
+sales.data$name <- sales.data$pn
 
-df.fnow[, c("nn", "date", "sale", "order", "other", "stock")]
+#sales.excel.june <- paste.table()
+names(sales.excel.june) <- c("pn", "sale")
+sales.june <- merge(pns.fnow[ ,"pn"], sales.excel.june, by = 1, all.x = TRUE)
+is.na(sales.june$sale) <- 0
+
+write.csv(sales.data[, c("nn","name", "date", "sale", "order", "other", "price", "cost", "stock")], "sales.csv", quote = FALSE)
+
+head(df.fnow[, c("nn", "date", "sale", "order", "other", "stock")], 5)
+tail(df.fnow[, c("nn", "date", "sale", "order", "other", "stock")], 500)
 df.fnow[c(1:700), c("nn", "date", "sale", "order", "other", "stock")]
-as.numeric(sales[pn,])
+all <- rbind(
+  sales = as.numeric(sales[pn,]),
+  stocks = as.numeric(stocks[pn,])
+)
+colnames(all) <- names(sales)
+
+a <- 1
+cat("Start:")
+for(b in 1:10) {
+  cat(".")
+  a <- a + b
+}
+cat("\r\n")

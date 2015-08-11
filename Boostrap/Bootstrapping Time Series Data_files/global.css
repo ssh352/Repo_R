@@ -1,0 +1,63 @@
+body	{ background-color: lightyellow; }
+h1	{ text-align: center;
+	  color: teal;
+	  font-family: Arial;
+	}
+h2, h3	{ color: teal;
+	  font-family: Arial;
+	}
+img	{ border-style: solid;
+	  border-width: 1px;
+	  margin: 10px;
+	}
+
+img.chart {
+	  border-style: none;
+	  margin: 10px;
+	}
+
+/*
+ *	Taken from "Building a Two-Column Layout"
+ *	in "CSS Cookbook" by Schmitt
+ */
+
+#mainContent {
+	float: left;
+	width: 80%;
+	maring-top: 0;
+	margin-right: 1.67em;
+	border-right: 1px solid black;
+	padding-top: 0;
+	padding-right: 1em;
+	padding-bottom: 20px;
+}
+
+#sidebar {
+	padding-left: 2em;
+	margin-top: 0;
+	padding-top: 0;
+}
+
+#footer {
+	clear: both;
+	padding-top: 1em;
+	padding-bottom: 1em;
+	border-top: 1px solid #333;
+	text-align: center;
+}
+
+/*
+ *	Styling for R output
+ */
+
+.print	{ white-space: pre;
+	  font-size: small;
+	  font-family: courier, monospace;
+	}
+
+/*
+ *  CSS class for elements flowing left-to-right, top-to-bottom
+ */
+
+.flow { float: left;
+        margin: 5px; }
