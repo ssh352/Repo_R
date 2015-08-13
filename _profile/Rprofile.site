@@ -47,3 +47,5 @@ paste.table <- function() {
 #copy.excel <- function(x,row.names=FALSE,col.names=TRUE,...) {
 #  write.table(x,"clipboard",sep="\t",row.names=row.names,col.names=col.names,...)
 #}
+
+if(!exists("passwords", mode="function")) source("D:/Data Mining/_other/passwords.r")
