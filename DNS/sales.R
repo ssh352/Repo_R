@@ -252,8 +252,6 @@ for (i in 1:length(sales_weekly)) {
 ##  данных                    ##
 ################################
 # Запомним временную серию первого магазина, т.к. они больше всего похожи на продажи СПБ магазинов
-#msk <- scale(sales_weekly[[1]])
-#msk <- head(msk, length(msk) - 46)
 msk_restored <- head(sales_weekly[[1]], length(sales_weekly[[1]]) - 46)
 
 #Тестируем модель предсказания
@@ -533,7 +531,8 @@ fcast <- fcast_monthly(zoo_series = apply.monthly(sales, FUN=sum), fcast.period 
 
 opar <- par(no.readonly=TRUE)
 #Строим общие графики
-pdf("observed_monthly.pdf", family="NimbusSan", encoding = "CP1251.enc")
+# Запомним временную серию первого магазина, т.к. они больше всего похожи на продажи СПБ магазинов
+pdf("forecasts.pdf", family="NimbusSan", encoding = "CP1251.enc")
 
 #Нормализуем все продажи и выводим на экран
 for (i in 1:length(sales_monthly_zoo)) {
@@ -552,197 +551,122 @@ legend("topleft", names(shops),
        lty="solid",
        cex=0.75)
 
-#И выводим общие данные
-i <- 1
-for(i in 1:length(shops)) {
-  plot(sales_monthly_zoo[[i]], main = names(shops)[i], cex=1, xlab=NA, ylab="Продажи (тыс.р)", type="l", col="gray", las=2)
-  # Добавляем линию тренда
-  model <- lm(as.numeric(sales_monthly_zoo[[i]]) ~ index(sales_monthly_zoo[[i]]))
-  abline(model, col = "green")
-  #Добавляем сглаженную ЛР для данных о продажах
-  lines(zoo(lowess(sales_monthly_zoo[[i]])$y, index(sales_monthly_zoo[[i]])), col="red")
-  #И описание диаграммы
-  legend("topleft", c("Продажи", "Тренд", "Сглаженные"), 
-         col=c("gray","green","red"),
-         lty=c("solid","solid","solid"),
-         cex=1)
-  #в случае если у нас есть 2а года продаж и больше добавляем дополнительную информацию
-  if (length(sales_monthly_zoo[[i]]) >= 24) {
-    plot(stl(sales_monthly[[i]], s.window = "periodic"))
-  }
-}
-dev.off()
-embedFonts("observed_monthly.pdf") 
-
 ################################
 ##  тестируем на реальных     ##
 ##  данных                    ##
 ################################
 # Запомним временную серию первого магазина, т.к. они больше всего похожи на продажи СПБ магазинов
 msk_restored <- head(sales_monthly_zoo[[1]], -9)
+start.date <- as.numeric(unlist(strsplit(as.character(start(sales_monthly_zoo[[1]])), "-"))[c(1,2)])
 
-#Тестируем модель предсказания
-pdf("testing.pdf", family = "NimbusSan", encoding = "CP1251.enc")
-#Для тестирования будем использовать данные за последние 12 месяцев
-back <- 12
-forward <- 6
+forecasts <- list()
+
+#Тут будем выводить данные о продажах и прогнозы
 for(i in 1:length(shops)) {
   print(paste(names(shops)[i],": Start...", sep=""))
-  #Тестируем модель предсказания
+  
+  main_text <- paste("Магазин", names(sales_monthly)[i])
+  xlab_text <- "Время"
+  ylab_text <- "Продажи в рублях"
   #Берем группировку по неделям
   #cut_weekly <- weekly_windows(sales_daily[[i]], end_date = as.Date(tail(index(sales_daily[[i]]),1)) - days_shift, as_ts = TRUE)
-  cut_zoo <- head(sales_monthly_zoo[[i]], -back)
-  start_ts <- as.numeric(unlist(strsplit(strtrim(start(cut_zoo),7),"-")))
-  cut_ts <- ts(as.numeric(cut_zoo),start=start_ts, frequency = 12)
-  #full_weekly <- weekly_windows(sales_daily[[i]], as_ts = TRUE)
-  full_zoo <- sales_monthly_zoo[[i]]
-  #на сколько недель будем предсказывать
-  sum_cur <- sum(tail(full_zoo, forward))
-  
-  #однопараметрическое преобразование Бокса-Кокса (пока не очень понимаю что это)
-  Lw <- BoxCox.lambda(cut_ts, method="loglik")
-  #Lw <- -0.1
-  
-  #Custom ARIMA
-  sales.monthly <- ts(sales_monthly_zoo[[i]], start=as.numeric(unlist(strsplit(strtrim(start(sales_monthly_zoo[[i]]),7),"-"))), frequency = 12)
-  tsdisplay(sales.monthly)
-  m.arima <- arima(sales.monthly, order=c(2,1,2), seasonal = c(1,1,1))
-  summary(m.arima)
-  plot(sales.monthly)
-  lines(fitted(m.arima), col="green")
-  plot(forecast(m.arima, h=6))
-  
-  t.value <- data.frame(ar=0, i=1, ma=0, s1 = 0, s2 = 0, s3 = 0, aic = 0, v12 = 0)
-  
-  library(dplyr)
-  r <- 0
-  for (i in 0:3) {
-    for (j in 0:3) {
-      for (k in 0:1) {
-        for (s1 in 0:2) {
-          for (s2 in 0:2) {
-            for (s3 in 0:2) {
-              r <- r + 1
-              print(c(r, i, k, j, s1, s2, s3))
-              aic <- NA
-              v12 <- NA
-              try({
-                m.arima <- arima(sales.monthly, order=c(i,k,j), seasonal = c(s1,s2,s3))
-                aic <- AIC(m.arima)
-                v12 <- fitted(m.arima)[34]
-              })
-              t.value[r, ] <- c(i, k, j, s1, s2, s3, aic, v12)
-            }
-          }
-        }
-      }
-    }
+  if (length(sales_monthly[[i]]) == 9) {
+    a <- c(as.numeric(msk_restored), as.numeric(sales_monthly[[i]]))
+    sales.ts <- ts(a, frequency = 12, start = start.date)
+  } else {
+    sales.ts <- sales_monthly[[i]]
   }
-  library(sqldf)
-  res <- na.omit(t.value)
-  sqldf("SELECT * FROM res ORDER BY aic DESC")
-  sqldf("SELECT * FROM res ORDER BY v12")
-  #filter(na.omit(t.value), aic < (min(aic) + 5) &  v12 == max(v12))
-  m.arima <- arima(sales.monthly, order=c(1,0,3), seasonal = c(1,1,2))
-  #plot(sales.monthly)
-  plot(forecast(m.arima, h=6))
-  lines(fitted(m.arima), col="green")
+
+  #Здесь тестируем модели и выбираем подходящую
+  #auto.arima.fit <- auto.arima(sales_monthly$клин, trace=TRUE,
+                               #parallel=TRUE, num.cores=8,
+                               #max.order=50000,
+                               #ic="aic",
+                               #stationary=FALSE, seasonal=TRUE,
+                               #stepwise=FALSE, 
+                               #max.d=3, max.D=3,
+                               #max.P=3, max.Q=3,
+                               #max.p=5, max.q=5)
+  #auto.arima.forecast <- forecast(auto.arima.fit, 12)
+  #plot(auto.arima.forecast, type = "l")
+  #lines(fitted(auto.arima.forecast), col = "green")
   
-  #TBATS  
-  fit.tbats <- tbats(cut_zoo, lambda=Lw)
-  fcast.tbats <- forecast(fit.tbats, h, lambda=Lw)
-  sum_tbats <- sum(fcast.tbats$mean)
+  #arima.fit <- arima(sales_monthly$электрозавод, order=c(1,0,1), seasonal = c(1,1,0))
+  #summary(arima.fit)
+  #arima.forecast <- forecast(arima.fit, 12)
+  #plot(arima.forecast, type = "l")
+  #grid()
+  #lines(fitted(arima.forecast), col = "green")
+
+  #В начале рисуем общую информацию по магазину
+  plot(stl(sales.ts, s.window = "periodic"))
+  mtext(paste(main_text, ": ", ylab_text, sep=""),side=3,outer=F, cex=1, line=2, adj=0.5)
   
-  #ARIMA
-  fit.arima <- auto.arima(cut_ts, lambda=Lw)
-  tsdiag(fit.arima)
-  fcast.arima <- forecast(fit.arima, forward, lambda=Lw)
-  sum_arima <- floor(sum(fcast.arima$mean))
+  dates <- as.Date(format(time(as.xts(sales.ts)), "%Y-%m-%d"))
+  total <- as.numeric(sales.ts)
+  #общая картина по продажам 
+  plot(dates, total, 
+       main = main_text, sub = NULL, xlab = xlab_text, ylab = ylab_text,
+       type="l", col=palette()[1])
+  lines(dates, lowess(total)$y, type="l", lty="dashed", col=palette()[2])
   
-  cut_num <- as.numeric(cut_weekly)
-  mean_tbats_num <- floor(as.numeric(fcast.tbats$mean))
-  mean_arima_num <- floor(as.numeric(fcast.arima$mean))
-  all_tbats <- c(cut_num, mean_tbats_num)
-  all_arima <- c(cut_num, mean_arima_num)
-  
-  #Дополнительная тестовая проверка
-  if (i > 3) {
-    #Узнаем коэффиценты скалирования
-    #s <- scale(cut_weekly)
-    #cut_center <- attr(s, "scaled:center")
-    #cut_scale <- attr(s, "scaled:scale")
-    #msk_restored <- msk * cut_scale + cut_center
-    assembly_zoo <- rbind(msk_restored, cut_weekly_zoo)
-    assembly <- weekly_windows(assembly_zoo, as_ts=TRUE)
-    
-    Lw <- BoxCox.lambda(assembly, method="loglik")
-    
-    #ARIMA
-    fit.arima <- auto.arima(assembly, lambda=Lw)
-    fcast.arima <- forecast(fit.arima, h, lambda=Lw)
-    sum_arima_assembly <- floor(sum(fcast.arima$mean))
-    
-    mean_arima_assembly_num <- floor(as.numeric(fcast.arima$mean))
-    all_arima_assembly <- c(cut_num, mean_arima_assembly_num)
-  }
-  
-  #start_date <- as.Date(paste(c(start(cut_weekly),1), sep="", collapse=" "), "%Y %U %w")
-  #end_date <- as.Date(paste(c(end(cut_weekly),1), sep="", collapse=" "), "%Y %U %w")
-  ix_date <- index(full_weekly_zoo)
-  #Рисуем график продаж
-  plot(ix_date,full_weekly, 
-       main = names(shops)[i], sub = NULL, xlab = NA, ylab = "Продажи (тыс.р)",
-       type="l", col="black", xlim=as.numeric(as.Date(c("2014-01-06","2015-03-16"))), axes=FALSE)
-  axis(side=2)
-  tick_dates <- aggregate(ix_date, by=list(strtrim(as.character(ix_date),7)), FUN=min)$x
-  axis(side=1, at = tick_dates, labels = substr(as.character(tick_dates),3,10), las=2)
-  #axis(side=1, at = ix_date, labels = substr(as.character(ix_date),3,10), las=2)
-  box()
   #Добавляем линии для решетки
   abline(h = axTicks(2),col="gray", lty="dashed")
-  abline(v = tick_dates,col="gray", lty="dashed")
-  #lines(ix_date,all, type="l", col="black", xlim=as.numeric(as.Date(c("2014-01-06","2015-03-16"))))
-  l_train <- (length(ix_date) - h)
-  l <- length(ix_date)
+  abline(v = dates[seq(3, length(dates), 4)],col="gray", lty="dashed")
   
-  #Добавляем форкасты 
-  lines(ix_date[c(l_train:l)],all_tbats[c(l_train:l)], col="green", lwd=3)
-  lines(ix_date[c(l_train:l)],all_arima[c(l_train:l)], col="blue", lwd=3)
-  #Если считали доп модель, то выводим ее
-  if (i > 3) {
-    lines(ix_date[c(l_train:l)],all_arima_assembly[c(l_train:l)], col="magenta", lwd=3)
-  }
-  #Добавляем смазанные данные о продажах
-  lines(ix_date,lowess(full_weekly)$y, col="red", lty = "dashed")
+  model <- lm(as.numeric(total) ~ as.numeric(dates))
+  abline(model, col = "green")
   
-  #Посчитаем размер ошибки для обоих предсказаний
-  tbats_error <- as.integer(sum_tbats / sum_cur * 100 - 100)
-  arima_error <- as.integer(sum_arima / sum_cur * 100 - 100)
-  arima_error_assembly <- as.integer(sum_arima_assembly / sum_cur * 100 - 100)
+  legend("topleft", 
+         c("Real", "Trend line", "lowess"), 
+         col=c("black","green", "red"),
+         lty=c("solid","solid","dashed"),
+         lwd=2,
+         cex=1)
   
-  if (i > 3) {
-    legend("topleft", 
-           c("Реальные", 
-             paste("TBATS (",tbats_error,"%)", sep=""),
-             paste("ARIMA (",arima_error,"%)", sep=""),
-             paste("ARIMA модель (",arima_error_assembly,"%)", sep=""),
-             "Lowess"), 
-           col=c("black","green","blue", "magenta","red"),
-           lty=c("solid","solid","solid","solid","dashed"),
-           lwd=2,
-           cex=1)
-  } else {
-    legend("topleft", 
-           c("Реальные", 
-             paste("TBATS (",tbats_error,"%)", sep=""),
-             paste("ARIMA (",arima_error,"%)", sep=""),
-             "Lowess"), 
-           col=c("black","green","blue", "red"),
-           lty=c("solid","solid","solid","dashed"),
-           lwd=2,
-           cex=1)
-  }
-  mtext("Расхождения с реальными данными указаны в процентах", adj=0)
+  #Custom ARIMA
+  #sales.monthly <- ts(sales_monthly_zoo[[i]], start=as.numeric(unlist(strsplit(strtrim(start(sales_monthly_zoo[[i]]),7),"-"))), frequency = 12)
+  #tsdisplay(sales.monthly)
+  arima.fit <- arima(sales.ts, order=c(1,0,1), seasonal = c(1,1,0))
+  #summary(arima.fit)
+  arima.forecast <- forecast(arima.fit, 12)
+  forecasts[[names(shops)[i]]] <- arima.forecast$mean
+  
+  plot(arima.forecast, type = "l", main = paste("Прогноз:", main_text))
+  abline(h = axTicks(2), col="gray", lty="dashed")
+  abline(v = axTicks(1), col="gray", lty="dashed")
+
+  #Соединим линией реальные продажи с прогнозными
+  f.dates <- c(tail(as.numeric(time(sales.ts)), 1), head(as.numeric(time(arima.forecast$mean)), 1))
+  f.sales <- c(tail(as.numeric(sales.ts), 1), head(as.numeric(arima.forecast$mean), 1))
+  #Добавим сглаженную линию для продаж + прогноз
+  lines(f.dates, lowess(f.sales)$y, type="l")
+  
+  f.dates <- c(as.numeric(time(sales.ts)), as.numeric(time(arima.forecast$mean)))
+  f.sales <- c(as.numeric(sales.ts), as.numeric(arima.forecast$mean))
+  #Добавим сглаженную линию для продаж + прогноз
+  lines(f.dates, lowess(f.sales)$y, type="l", lty="dashed", col=palette()[2])
+
+  #И добавим линию тренда
+  model <- lm(as.numeric(f.sales) ~ as.numeric(f.dates))
+  abline(model, col = "green")
+  
+  #Добавим линию тренда на продажи + прогноз
+  legend("topleft", 
+         c("Real", "Trend line", "lowess", "Forecast"), 
+         col=c("black","green", "red", "blue"),
+         lty=c("solid","solid","dashed", "solid"),
+         lwd=2,
+         cex=1)
+  
   print(paste(names(shops)[i],": Done!", sep=""))
 }
 dev.off()
+embedFonts("forecasts.pdf") 
+
+
+#Save CSV
+df <- round(as.data.frame(forecasts))
+dimnames(df)[[1]] <- format(time(as.xts(forecasts[[1]])), "%Y-%m-%d")
+
+write.csv(df, file="forecasts.csv")

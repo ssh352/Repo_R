@@ -82,16 +82,26 @@ t(sapply(1:(length(sales.dates)-1), function(i) {
   return(c(date,sales[date,]))
 }))
 
+sales <- read.csv("sales.csv")
+head(sales, 155)
 ix.min <- min(which(sales$total != 0))
 ix.max <- max(which(sales$total != 0))
 
 sales.dates.total <- as.Date(sales.dates[ix.min:ix.max], "%d.%m.%Y")
-sales.total <- sales[ix.min:ix.max,]
+sales.dates.total <- as.Date(sales$X[ix.min:ix.max])
+sales.total <- sales$total[ix.min:ix.max]
+tsdisplay(sales.total)
+
+
+head(sales.total)
+head(sales.dates.total)
+head(sales[c(ix.min, ix.max), ])
+tail(head(sales, 400))
+
 start.date <- sales.dates.total[1]
 start.date.ts <- as.numeric(unlist(strsplit(as.character(format(as.Date(start.date),"%Y-%m-%d")),"-")))
 
 ts.sales <- ts(sales.total, frequency = 365, start = start.date.ts)
-aggregate(ts.sales, as.yearmon, sum)
 #Первый раз взглянем 
 plot(stl(ts.sales, s.window = "periodic"))
 
@@ -99,17 +109,32 @@ zoo.sales <- zoo(sales.total, sales.dates.total)
 zoo.sales.month <- aggregate(zoo.sales, as.yearmon, sum)
 
 
-#Выводим данные помесячно в милионах рублей
-plot(stl(zoo.sales.month/1000000, s.window = "periodic"))
-
 #Попробуем построить прогнозы
 start.date <- format(start(zoo.sales.month), "%Y-%m-%d")
 start.date.ts <- as.numeric(unlist(strsplit(as.character(format(as.Date(start.date),"%Y-%m-%d")),"-")))
 ts.sales.month <- ts(zoo.sales.month, start = start.date.ts, frequency = 12)
+ts.sales.month.window <- window(ts.sales.month, start = c(2013,1), end = c(2015,5))
+plot(stl(ts.sales.month.window, s.window = "periodic"))
 
-arima.fit <- arima(ts.sales.month, order=c(1,0,2), seasonal = c(1,1,1))
+auto.arima.fit <- auto.arima(ts.sales.month.window, trace=TRUE,
+                             parallel=TRUE, num.cores=8,
+                             max.order=50000,
+                             ic="aic",
+                             stationary=FALSE, seasonal=TRUE,
+                             stepwise=FALSE, 
+                             max.d=3, max.D=3,
+                             max.P=3, max.Q=3,
+                             max.p=5, max.q=5)
+auto.arima.forecast <- forecast(auto.arima.fit, 12)
+plot(auto.arima.forecast, type = "l")
+lines(fitted(auto.arima.forecast), col = "green")
+
+
+arima.fit <- arima(ts.sales.month.window, order=c(1,0,1), seasonal = c(2,0,0))
+summary(arima.fit)
 arima.forecast <- forecast(arima.fit, 12)
 plot(arima.forecast, type = "l")
+grid()
 lines(fitted(arima.forecast), col = "green")
 
 zoo.sales.clean <- Return.clean(zoo.sales.month, method = "boudt", alpha = 0.02)
@@ -119,32 +144,44 @@ lines(zoo.sales.clean, col = "green")
 plot(sales.total, type="l")
 describe(sales.total)
 
-t.value <- data.frame(ar=0, i=1, ma=0, s1 = 0, s2 = 0, s3 = 0, aic = 0, v12 = 0)
+#Выводим всякую красоту
+#Выводим данные помесячно в милионах рублей
+dates.month <- index(zoo.sales.month)
+sales.month <- as.numeric(zoo.sales.month)
 
-r <- 0
-for (o1 in 0:3) {
-  for (o2 in 0:3) {
-    for (o3 in 0:1) {
-      for (s1 in 0:4) {
-        for (s2 in 0:4) {
-          for (s3 in 0:4) {
-            r <- r + 1
-            print(c(r, o1, o2, o3, s1, s2, s3))
-            aic <- NA
-            v12 <- NA
-            try({
-              m.arima <- arima(ts.sales.month, order=c(o1,o2,o3), seasonal = c(s1,s2,s3))
-              aic <- AIC(m.arima)
-              v12 <- sum(m.arima$residuals^2)
-            })
-            t.value[r, ] <- c(o1, o2, o3, s1, s2, s3, aic, v12)
-          }
-        }
-      }
-    }
-  }
-}
+pdf("forecast.pdf", encoding = "CP1251.enc")
 
-res <- na.omit(t.value)
-sqldf("SELECT * FROM res ORDER BY aic ASC LIMIT 0, 20")
-sqldf("SELECT * FROM res ORDER BY v12 ASC LIMIT 0, 20")
+main_text = "Кинотеатр Титаник"
+ylab_text = "Продажи в рублях"
+xlab_text = "Время"
+plot(dates.month, sales.month, 
+     main = main_text, sub = NULL, xlab = xlab_text, ylab = ylab_text,
+     type="l", col=palette()[1])
+lines(dates.month, lowess(zoo.sales.month)$y, type="l", lty="dashed", col=palette()[2])
+
+#Добавляем линии для решетки
+abline(h = axTicks(2),col="gray", lty="dashed")
+abline(v = dates.month[seq(3, length(dates.month), 3)],col="gray", lty="dashed")
+
+model <- lm(as.numeric(zoo.sales.month) ~ as.numeric(dates.month))
+abline(model, col = "green")
+
+legend("topleft", 
+       c("Реальные", "Тренд", "Сглаженные"), 
+       col=c("black","green", "red"),
+       lty=c("solid","solid","dashed"),
+       lwd=2,
+       cex=1)
+
+plot(stl(zoo.sales.month, s.window = "periodic"))
+
+arima.fit <- arima(ts.sales.month.window, order=c(1,0,1), seasonal = c(2,0,0))
+arima.forecast <- forecast(arima.fit, 12)
+plot(arima.forecast, type = "l")
+abline(v = axTicks(1),col="gray", lty="dashed")
+abline(h = axTicks(2),col="gray", lty="dashed")
+
+dev.off()
+
+tsdisplay(ts.sales.month)
+tsdisplay(diff(ts.sales.month))

@@ -9,6 +9,8 @@ library("forecast")
 library("quantmod") # загрузка с finance.google.com
 library("sophisthse") # загрузка с sophist.hse.ru
 
+
+
 #8.2.1
 y <- arima.sim(n=100, list(ar=0.7))
 plot(y)
