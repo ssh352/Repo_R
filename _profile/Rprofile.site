@@ -23,21 +23,22 @@
 
 # from http://www.r-bloggers.com/using-the-windows-clipboard-or-passing-data-quickly-from-excel-to-r-and-back-again/
 # Copy data out of R
-copy.table <- function(obj, size = 4096) {
+copy.table <- function(obj, size = 4096, row.names=FALSE, col.names=FALSE) {
   clip <- paste('clipboard-', size, sep = '')
   f <- file(description = clip, open = 'w')
-  write.table(obj, f, row.names = FALSE, sep = '\t')
+  #write.table(obj, f, row.names = FALSE, sep = '\t')
+  write.table(obj, f, sep="\t",row.names=row.names,col.names=col.names)
   close(f)  
 }
  
 # Paste data into R
-paste.table <- function() {
+paste.table <- function(b.header = FALSE, b.stringsAsFactors = FALSE) {
   f <- file(description = 'clipboard', open = 'r')
-  df <- read.table(f, sep = '\t', header = TRUE)
+  df <- read.table(f, sep = '\t', header = b.header, stringsAsFactors = b.stringsAsFactors)
   close(f)
   return(df)
 }
-
+  
 # from http://www.r-bloggers.com/copying-data-from-excel-to-r-and-back/
 #Copying Data from Excel to R and Back
 #paste.excel <- function(header=TRUE,...) {
