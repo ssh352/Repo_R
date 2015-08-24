@@ -400,10 +400,6 @@ all <- rbind(
 )
 colnames(all) <- names(sales)
 
-a <- 1
-cat("Start:")
-for(b in 1:10) {
-  cat(".")
-  a <- a + b
-}
-cat("\r\n")
+#Попробуем построить прогнозы по SB
+sb.sales <- sales[ix$V1, ]
+plot(sb.sales)
