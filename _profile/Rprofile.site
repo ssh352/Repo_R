@@ -49,9 +49,4 @@ paste.table <- function(b.header = FALSE, b.stringsAsFactors = FALSE) {
 #  write.table(x,"clipboard",sep="\t",row.names=row.names,col.names=col.names,...)
 #}
 
-passwords <- function(x) {
-  switch(x,
-         "cisrepl-v.ocs.ru" = list(login="reader", password="xbnfntkm")
-  )
-}
-  
+if(!exists("passwords", mode="function")) source("D:/Data Mining/_other/passwords.r")
